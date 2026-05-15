@@ -1205,16 +1205,17 @@
 
   <div class="setup-card">
     <div class="setup-h">Metadata</div>
-    <p class="setup-p">When the ACR returns an ISRC, Crate hits GetSongBPM directly for key/BPM/energy. SoundNet is the paid fallback.</p>
+    <p class="setup-p">After AudD names the track, Crate looks up BPM/key/energy. SoundNet (Track Analysis via RapidAPI) is primary — broad catalog. GetSongBPM is the fallback.</p>
     <div class="setup-field">
-      <label>GetSongBPM API key</label>
-      <input type="password" id="gsbKey" placeholder="optional in mock mode" autocomplete="off">
+      <label>RapidAPI key — SoundNet (primary)</label>
+      <input type="password" id="snKey" placeholder="x-rapidapi-key" autocomplete="off">
     </div>
     <div class="setup-field">
-      <label>RapidAPI key (SoundNet fallback)</label>
-      <input type="password" id="snKey" placeholder="optional" autocomplete="off">
+      <label>GetSongBPM API key (fallback)</label>
+      <input type="password" id="gsbKey" placeholder="optional" autocomplete="off">
     </div>
     <button class="setup-btn secondary" id="saveMeta">Save keys</button>
+    <button class="setup-btn secondary" id="testSn" style="margin-top:8px">Test SoundNet now</button>
     <button class="setup-btn secondary" id="testGsb" style="margin-top:8px">Test GetSongBPM now</button>
     <div class="setup-note" id="gsbTestResult" style="font-family:var(--mono);font-size:11px;line-height:1.6;white-space:pre-wrap;margin-top:10px"></div>
   </div>
@@ -2093,25 +2094,44 @@ async function startRealCapture(auddToken) {
     return;
   }
 
-  // Enrich with GetSongBPM (ISRC first, then title/artist search)
+  // Metadata waterfall: SoundNet (primary — broad catalog) → GetSongBPM (fallback)
   let metadata = { bpm: null, key_camelot: null, key_musical: null, energy: null };
   let metaNote = null;
+  let metaSource = null;
+  const snKey  = localStorage.getItem('crate.rapidapi.key');
   const gsbKey = localStorage.getItem('crate.getsongbpm.key');
-  if (gsbKey) {
-    state.identifyHint = 'Looking up BPM / key…';
+
+  const hasMeta = (m) => m && (m.bpm || m.key_camelot);
+
+  if (snKey) {
+    state.identifyHint = 'Looking up BPM / key (SoundNet)…';
+    render();
+    try {
+      const m = await lookupSoundNet(recognition, snKey);
+      if (hasMeta(m)) { metadata = m; metaSource = 'soundnet'; }
+    } catch (err) {
+      console.warn('SoundNet lookup failed', err);
+      metaNote = `SoundNet: ${err.message}`;
+    }
+  }
+
+  if (!metaSource && gsbKey) {
+    state.identifyHint = 'Trying GetSongBPM…';
     render();
     try {
       const m = await lookupGetSongBpm(recognition, gsbKey);
-      if (m) metadata = m;
-      else metaNote = 'GetSongBPM had no match for this track';
+      if (hasMeta(m)) { metadata = m; metaSource = 'getsongbpm'; }
+      else if (!metaNote) metaNote = 'No BPM/key found in SoundNet or GetSongBPM';
     } catch (err) {
       console.warn('GetSongBPM lookup failed', err);
-      metaNote = `GetSongBPM: ${err.message}`;
-      toast(metaNote);
+      if (!metaNote) metaNote = `GetSongBPM: ${err.message}`;
     }
-  } else {
-    metaNote = 'No GetSongBPM key set';
   }
+
+  if (!metaSource && !metaNote) {
+    metaNote = (snKey || gsbKey) ? 'No metadata source had this track' : 'No metadata key set';
+  }
+  if (metaSource) metaNote = null;
 
   const c = {
     id: `c_${Date.now()}_${Math.floor(Math.random() * 9999)}`,
@@ -2125,6 +2145,7 @@ async function startRealCapture(auddToken) {
     starred: false,
     note: '',
     meta_note: metaNote,
+    meta_source: metaSource,
     heard_at: Date.now(),
     acr_provider: 'audd-direct',
     acr_raw: recognition.raw
@@ -2204,6 +2225,40 @@ async function callAudd(blob, token) {
     isrc:   json.result.isrc || null,
     raw:    json
   };
+}
+
+// SoundNet "Track Analysis" via RapidAPI. Returns Camelot directly.
+// GET track-analysis.p.rapidapi.com/pktx/analysis?song=&artist=
+async function lookupSoundNet(recognition, rapidKey) {
+  const cacheKey = `crate.sn.${recognition.title}|${recognition.artist}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  const params = new URLSearchParams({ song: recognition.title });
+  if (recognition.artist) params.set('artist', recognition.artist);
+
+  const res = await fetch(`https://track-analysis.p.rapidapi.com/pktx/analysis?${params}`, {
+    headers: {
+      'x-rapidapi-key': rapidKey,
+      'x-rapidapi-host': 'track-analysis.p.rapidapi.com'
+    }
+  });
+  if (res.status === 401 || res.status === 403) throw new Error('RapidAPI key rejected (401/403)');
+  if (res.status === 429) throw new Error('RapidAPI rate limit hit (429)');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const d = await res.json().catch(() => null);
+  if (!d || (!d.tempo && !d.camelot && !d.key)) return null; // no match
+
+  const energy01 = typeof d.energy === 'number' ? d.energy : parseFloat(d.energy);
+  const out = {
+    bpm: d.tempo ? Math.round(parseFloat(d.tempo)) : null,
+    key_camelot: d.camelot || musicalToCamelot(`${d.key || ''}${d.mode === 'minor' ? 'm' : ''}`),
+    key_musical: d.key ? `${d.key}${d.mode ? ' ' + d.mode : ''}` : null,
+    energy: isFinite(energy01) ? Math.max(1, Math.min(10, Math.round(energy01 / 10))) : null
+  };
+  try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
+  return out;
 }
 
 // GetSongBPM lookup. ISRC isn't reliably supported by their API, so this
@@ -2322,6 +2377,28 @@ async function testGetSongBpm() {
       `Pipeline picks: ${typeof resolved === 'string' ? resolved : JSON.stringify(resolved)}`;
   } catch (e) {
     out.textContent = `NETWORK ERROR: ${e.message}`;
+  }
+}
+
+async function testSoundNet() {
+  const out = document.getElementById('gsbTestResult');
+  const key = (document.getElementById('snKey').value || localStorage.getItem('crate.rapidapi.key') || '').trim();
+  if (!key) { out.textContent = 'No RapidAPI key. Enter it in the SoundNet field first.'; return; }
+  out.textContent = 'Testing SoundNet…';
+
+  const probes = [
+    { title: 'Strings of Life', artist: 'Rhythim Is Rhythim' },
+    { title: 'Voodoo Ray',      artist: 'A Guy Called Gerald' }
+  ];
+  const lines = [];
+  for (const p of probes) {
+    try {
+      const r = await lookupSoundNet(p, key);
+      lines.push(`${p.title} — ${p.artist}\n  ${r ? JSON.stringify(r) : 'no match'}`);
+    } catch (e) {
+      lines.push(`${p.title} — ${p.artist}\n  ERROR: ${e.message}`);
+    }
+    out.textContent = lines.join('\n\n');
   }
 }
 
@@ -2592,6 +2669,7 @@ function bindGlobalEvents() {
   });
 
   document.getElementById('testGsb').addEventListener('click', testGetSongBpm);
+  document.getElementById('testSn').addEventListener('click', testSoundNet);
 
   document.getElementById('saveAudd').addEventListener('click', () => {
     const v = document.getElementById('auddToken').value.trim();
