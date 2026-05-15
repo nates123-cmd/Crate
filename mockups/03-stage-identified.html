@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Crate — Identified</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #120E0E;
+    --surface-1: #1A1414;
+    --surface-2: #221A1A;
+    --surface-3: #2A2020;
+    --divider: #2A2020;
+    --accent: #E63946;
+    --accent-warm: #FF5560;
+    --accent-dim: #8C2530;
+    --text-1: #F2E8DC;
+    --text-2: #9C8B85;
+    --text-3: #5E504C;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overscroll-behavior: none;
+  }
+
+  body {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 18px 20px 120px;
+    position: relative;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 24px;
+  }
+
+  .app-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+  }
+
+  .session-label {
+    font-size: 12px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+
+  /* ───── STAGE — Identified ───── */
+  .stage {
+    background: var(--surface-1);
+    border-radius: 22px;
+    padding: 24px 24px 22px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .stage-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .stage-state {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 500;
+  }
+
+  .relisten-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .relisten-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: var(--text-2);
+  }
+
+  .stage-track {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-1);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 4px;
+  }
+
+  .stage-artist {
+    font-size: 15px;
+    color: var(--text-2);
+    font-weight: 500;
+    margin-bottom: 24px;
+  }
+
+  /* Track metadata row */
+  .stage-meta {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .meta-block {
+    flex: 1;
+    background: var(--surface-2);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 64px;
+  }
+
+  .meta-block.camelot {
+    flex: 1.2;
+    background: rgba(230, 57, 70, 0.12);
+    border: 1px solid rgba(230, 57, 70, 0.3);
+  }
+
+  .meta-label {
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .meta-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    font-family: "SF Mono", ui-monospace, monospace;
+  }
+
+  .meta-value.accent {
+    color: var(--accent);
+  }
+
+  .meta-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 2px;
+  }
+
+  /* Energy dots */
+  .energy-dots {
+    display: flex;
+    gap: 3px;
+    margin-top: 6px;
+  }
+
+  .energy-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--surface-3);
+  }
+
+  .energy-dot.on {
+    background: var(--accent);
+  }
+
+  /* ───── RAIL ───── */
+  .rail {
+    margin-bottom: 24px;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0 4px 12px;
+  }
+
+  .section-title {
+    font-size: 13px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+
+  .section-meta {
+    font-size: 12px;
+    color: var(--text-3);
+    font-weight: 400;
+  }
+
+  .rail-item {
+    background: var(--surface-1);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .rail-item:active {
+    background: var(--surface-2);
+  }
+
+  .rail-rank {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-3);
+    width: 24px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", ui-monospace, monospace;
+  }
+
+  .rail-item:nth-child(2) .rail-rank { color: var(--accent); }
+
+  .rail-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .rail-title {
+    font-size: 14px;
+    color: var(--text-1);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+  }
+
+  .rail-reason {
+    font-size: 11px;
+    color: var(--text-2);
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rail-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 56px;
+  }
+
+  .rail-key {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: "SF Mono", ui-monospace, monospace;
+    line-height: 1;
+  }
+
+  .rail-bpm {
+    font-size: 11px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", ui-monospace, monospace;
+  }
+
+  /* ───── LOG ───── */
+  .log {
+    margin-bottom: 24px;
+  }
+
+  .log-item {
+    background: var(--surface-1);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .log-time {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 60px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .log-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .log-title {
+    font-size: 14px;
+    color: var(--text-1);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-artist {
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-star {
+    font-size: 14px;
+    color: var(--accent);
+    width: 20px;
+    text-align: right;
+  }
+
+  .log-star.empty {
+    color: var(--text-3);
+  }
+
+  /* Annotations */
+  .annotations {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 440px;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 100;
+    display: none;
+  }
+
+  .annotations.show { display: block; }
+
+  .anno {
+    position: absolute;
+    background: rgba(255, 244, 230, 0.95);
+    color: #1a1414;
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .anno-stage { top: 95px; right: 16px; }
+  .anno-camelot { top: 235px; left: 16px; }
+  .anno-rail-top { top: 340px; right: 16px; }
+  .anno-rank-2 { top: 432px; right: 16px; }
+
+  .toggle-anno {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1px solid var(--divider);
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: ui-monospace, monospace;
+    cursor: pointer;
+    z-index: 101;
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <h1 class="app-title">Crate</h1>
+  <span class="session-label">Practice · 8:42pm</span>
+</header>
+
+<!-- STAGE — Identified -->
+<section class="stage">
+  <div class="stage-top">
+    <span class="stage-state">Caught it</span>
+    <button class="relisten-btn" aria-label="Listen again">
+      <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4a8 8 0 100 16c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+    </button>
+  </div>
+
+  <h2 class="stage-track">Strings of Life</h2>
+  <p class="stage-artist">Rhythim Is Rhythim</p>
+
+  <div class="stage-meta">
+    <div class="meta-block camelot">
+      <span class="meta-label">Key</span>
+      <span class="meta-value accent">8A</span>
+      <span class="meta-sub">A minor</span>
+    </div>
+
+    <div class="meta-block">
+      <span class="meta-label">BPM</span>
+      <span class="meta-value">123</span>
+      <span class="meta-sub">4/4</span>
+    </div>
+
+    <div class="meta-block">
+      <span class="meta-label">Energy</span>
+      <div class="energy-dots">
+        <span class="energy-dot on"></span>
+        <span class="energy-dot on"></span>
+        <span class="energy-dot on"></span>
+        <span class="energy-dot on"></span>
+        <span class="energy-dot on"></span>
+        <span class="energy-dot on"></span>
+        <span class="energy-dot on"></span>
+        <span class="energy-dot"></span>
+        <span class="energy-dot"></span>
+        <span class="energy-dot"></span>
+      </div>
+      <span class="meta-sub">7 / 10</span>
+    </div>
+  </div>
+</section>
+
+<!-- RAIL — populated -->
+<section class="rail">
+  <div class="section-header">
+    <span class="section-title">Rail</span>
+    <span class="section-meta">5 from your Crate fit</span>
+  </div>
+
+  <div class="rail-item">
+    <span class="rail-rank">1</span>
+    <div class="rail-info">
+      <div class="rail-title">Acid Eiffel</div>
+      <div class="rail-reason">Same key, +1 BPM, holds the energy</div>
+    </div>
+    <div class="rail-stats">
+      <span class="rail-key">8A</span>
+      <span class="rail-bpm">124</span>
+    </div>
+  </div>
+
+  <div class="rail-item">
+    <span class="rail-rank">2</span>
+    <div class="rail-info">
+      <div class="rail-title">Voodoo Ray</div>
+      <div class="rail-reason">Adjacent key (9A), +2 BPM, energy lift</div>
+    </div>
+    <div class="rail-stats">
+      <span class="rail-key">9A</span>
+      <span class="rail-bpm">125</span>
+    </div>
+  </div>
+
+  <div class="rail-item">
+    <span class="rail-rank">3</span>
+    <div class="rail-info">
+      <div class="rail-title">Plastic Dreams</div>
+      <div class="rail-reason">Same key, -2 BPM, cooldown move</div>
+    </div>
+    <div class="rail-stats">
+      <span class="rail-key">8A</span>
+      <span class="rail-bpm">121</span>
+    </div>
+  </div>
+
+  <div class="rail-item">
+    <span class="rail-rank">4</span>
+    <div class="rail-info">
+      <div class="rail-title">Music Sounds Better With You</div>
+      <div class="rail-reason">Relative major (8B), same BPM</div>
+    </div>
+    <div class="rail-stats">
+      <span class="rail-key">8B</span>
+      <span class="rail-bpm">123</span>
+    </div>
+  </div>
+
+  <div class="rail-item">
+    <span class="rail-rank">5</span>
+    <div class="rail-info">
+      <div class="rail-title">Knights of the Jaguar</div>
+      <div class="rail-reason">Adjacent key (7A), +3 BPM</div>
+    </div>
+    <div class="rail-stats">
+      <span class="rail-key">7A</span>
+      <span class="rail-bpm">126</span>
+    </div>
+  </div>
+</section>
+
+<!-- LOG -->
+<section class="log">
+  <div class="section-header">
+    <span class="section-title">Log</span>
+    <span class="section-meta">4 caught · this session</span>
+  </div>
+
+  <div class="log-item">
+    <span class="log-time">just now</span>
+    <div class="log-info">
+      <div class="log-title">Strings of Life</div>
+      <div class="log-artist">Rhythim Is Rhythim</div>
+    </div>
+    <span class="log-star empty">☆</span>
+  </div>
+
+  <div class="log-item">
+    <span class="log-time">12m ago</span>
+    <div class="log-info">
+      <div class="log-title">Cherry Pop</div>
+      <div class="log-artist">Yaeji</div>
+    </div>
+    <span class="log-star">★</span>
+  </div>
+
+  <div class="log-item">
+    <span class="log-time">28m ago</span>
+    <div class="log-info">
+      <div class="log-title">Move D — Untitled (Workshop 19)</div>
+      <div class="log-artist">Move D</div>
+    </div>
+    <span class="log-star empty">☆</span>
+  </div>
+</section>
+
+<div class="annotations" id="annotations">
+  <div class="anno anno-stage">STAGE — identified</div>
+  <div class="anno anno-camelot">Camelot = hero data</div>
+  <div class="anno anno-rail-top">Top 5 always</div>
+  <div class="anno anno-rank-2">Best fit = accent rank #</div>
+</div>
+
+<button class="toggle-anno" onclick="document.getElementById('annotations').classList.toggle('show')">
+  annotations
+</button>
+
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "Crate",
+  "short_name": "Crate",
+  "description": "Hear a track, identify it, get ranked transition suggestions from your own library.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#120E0E",
+  "theme_color": "#120E0E",
+  "icons": []
+}

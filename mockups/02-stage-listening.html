@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Crate — Listening</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #120E0E;
+    --surface-1: #1A1414;
+    --surface-2: #221A1A;
+    --divider: #2A2020;
+    --accent: #E63946;
+    --accent-warm: #FF5560;
+    --text-1: #F2E8DC;
+    --text-2: #9C8B85;
+    --text-3: #5E504C;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overscroll-behavior: none;
+  }
+
+  body {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 18px 20px 120px;
+    position: relative;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 32px;
+  }
+
+  .app-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+  }
+
+  .session-label {
+    font-size: 12px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+
+  /* ───── STAGE — Listening ───── */
+  .stage {
+    background: var(--surface-1);
+    border-radius: 22px;
+    padding: 40px 28px 36px;
+    margin-bottom: 24px;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Pulse ring behind the mic */
+  .pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 2px solid var(--accent-warm);
+    transform: translate(-50%, -50%);
+    margin-top: -28px;
+    animation: pulse 1.6s ease-out infinite;
+    pointer-events: none;
+  }
+
+  .pulse-ring.delay-1 { animation-delay: 0.5s; }
+  .pulse-ring.delay-2 { animation-delay: 1.0s; }
+
+  @keyframes pulse {
+    0% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0.8;
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(2.4);
+      opacity: 0;
+    }
+  }
+
+  .stage-state {
+    font-size: 11px;
+    color: var(--accent-warm);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 500;
+    margin-bottom: 32px;
+    animation: state-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes state-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  .mic-button {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 2;
+    cursor: pointer;
+  }
+
+  .mic-button svg {
+    width: 36px;
+    height: 36px;
+    fill: var(--text-1);
+  }
+
+  /* Animated waveform */
+  .waveform {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 24px;
+    margin-bottom: 10px;
+  }
+
+  .wave-bar {
+    width: 3px;
+    background: var(--accent-warm);
+    border-radius: 2px;
+    animation: wave 1.2s ease-in-out infinite;
+  }
+
+  .wave-bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+  .wave-bar:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+  .wave-bar:nth-child(3) { height: 22px; animation-delay: 0.2s; }
+  .wave-bar:nth-child(4) { height: 18px; animation-delay: 0.3s; }
+  .wave-bar:nth-child(5) { height: 24px; animation-delay: 0.4s; }
+  .wave-bar:nth-child(6) { height: 14px; animation-delay: 0.5s; }
+  .wave-bar:nth-child(7) { height: 20px; animation-delay: 0.6s; }
+  .wave-bar:nth-child(8) { height: 10px; animation-delay: 0.7s; }
+  .wave-bar:nth-child(9) { height: 16px; animation-delay: 0.8s; }
+
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.4); }
+    50% { transform: scaleY(1); }
+  }
+
+  .stage-prompt {
+    font-size: 17px;
+    color: var(--text-1);
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .stage-hint {
+    font-size: 13px;
+    color: var(--text-2);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ───── Rail (ghost preview) ───── */
+  .rail {
+    margin-bottom: 24px;
+    opacity: 0.4;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0 4px 12px;
+  }
+
+  .section-title {
+    font-size: 13px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+
+  .section-meta {
+    font-size: 12px;
+    color: var(--text-3);
+    font-weight: 400;
+  }
+
+  .rail-skeleton {
+    background: var(--surface-1);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .skel-line {
+    background: var(--surface-2);
+    border-radius: 4px;
+    height: 10px;
+    animation: shimmer 2.4s ease-in-out infinite;
+  }
+
+  .skel-line.short { width: 40%; }
+  .skel-line.medium { width: 65%; }
+  .skel-line.long { width: 80%; }
+
+  .skel-block {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .skel-meta {
+    background: var(--surface-2);
+    border-radius: 4px;
+    height: 14px;
+    width: 38px;
+    animation: shimmer 2.4s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.85; }
+  }
+
+  /* Log */
+  .log {
+    margin-bottom: 24px;
+    opacity: 0.6;
+  }
+
+  .log-item {
+    background: var(--surface-1);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .log-time {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 60px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .log-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .log-title {
+    font-size: 14px;
+    color: var(--text-1);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-artist {
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  .log-star {
+    font-size: 14px;
+    color: var(--accent);
+    width: 20px;
+    text-align: right;
+  }
+
+  .log-star.empty {
+    color: var(--text-3);
+  }
+
+  /* Annotations */
+  .annotations {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 440px;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 100;
+    display: none;
+  }
+
+  .annotations.show {
+    display: block;
+  }
+
+  .anno {
+    position: absolute;
+    background: rgba(255, 244, 230, 0.95);
+    color: #1a1414;
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .anno-stage { top: 110px; right: 16px; }
+  .anno-pulse { top: 155px; left: 16px; }
+  .anno-rail { top: 420px; right: 16px; }
+
+  .toggle-anno {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1px solid var(--divider);
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: ui-monospace, monospace;
+    cursor: pointer;
+    z-index: 101;
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <h1 class="app-title">Crate</h1>
+  <span class="session-label">Practice · 8:42pm</span>
+</header>
+
+<!-- STAGE — Listening -->
+<section class="stage">
+  <span class="stage-state">Listening…</span>
+
+  <div class="pulse-ring"></div>
+  <div class="pulse-ring delay-1"></div>
+  <div class="pulse-ring delay-2"></div>
+
+  <button class="mic-button" aria-label="Listening">
+    <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+  </button>
+
+  <div class="waveform">
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+    <span class="wave-bar"></span>
+  </div>
+
+  <p class="stage-hint">6s</p>
+</section>
+
+<!-- Rail skeleton -->
+<section class="rail">
+  <div class="section-header">
+    <span class="section-title">Rail</span>
+  </div>
+
+  <div class="rail-skeleton">
+    <span class="skel-meta"></span>
+    <div class="skel-block">
+      <div class="skel-line long"></div>
+      <div class="skel-line medium"></div>
+    </div>
+  </div>
+  <div class="rail-skeleton">
+    <span class="skel-meta"></span>
+    <div class="skel-block">
+      <div class="skel-line medium"></div>
+      <div class="skel-line short"></div>
+    </div>
+  </div>
+  <div class="rail-skeleton">
+    <span class="skel-meta"></span>
+    <div class="skel-block">
+      <div class="skel-line long"></div>
+      <div class="skel-line short"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Log (unchanged) -->
+<section class="log">
+  <div class="section-header">
+    <span class="section-title">Log</span>
+    <span class="section-meta">3 caught · this session</span>
+  </div>
+
+  <div class="log-item">
+    <span class="log-time">12m ago</span>
+    <div class="log-info">
+      <div class="log-title">Cherry Pop</div>
+      <div class="log-artist">Yaeji</div>
+    </div>
+    <span class="log-star">★</span>
+  </div>
+
+  <div class="log-item">
+    <span class="log-time">28m ago</span>
+    <div class="log-info">
+      <div class="log-title">Move D — Untitled (Workshop 19)</div>
+      <div class="log-artist">Move D</div>
+    </div>
+    <span class="log-star empty">☆</span>
+  </div>
+</section>
+
+<div class="annotations" id="annotations">
+  <div class="anno anno-stage">STAGE — listening</div>
+  <div class="anno anno-pulse">pulse rings expand outward</div>
+  <div class="anno anno-rail">RAIL — skeleton preview</div>
+</div>
+
+<button class="toggle-anno" onclick="document.getElementById('annotations').classList.toggle('show')">
+  annotations
+</button>
+
+</body>
+</html>

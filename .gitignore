@@ -1,0 +1,18 @@
+.DS_Store
+*.log
+
+# Local dev config (Supabase keys, AudD token, etc.)
+dev-config.js
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Personal data exports — never commit a Rekordbox library
+*.xml
+*.txt
+*.tsv
+!supabase/**

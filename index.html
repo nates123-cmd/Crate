@@ -1,0 +1,2547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crate">
+<meta name="theme-color" content="#120E0E">
+<link rel="manifest" href="./manifest.json">
+<title>Crate</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #120E0E;
+    --surface-1: #1A1414;
+    --surface-2: #221A1A;
+    --surface-3: #2A2020;
+    --divider: #2A2020;
+    --accent: #E63946;
+    --accent-warm: #FF5560;
+    --accent-dim: #8C2530;
+    --text-1: #F2E8DC;
+    --text-2: #9C8B85;
+    --text-3: #5E504C;
+
+    --col-max: 440px;
+    --pad-x: 20px;
+    --pad-y: 18px;
+    --pad-bottom: 120px;
+
+    --r-card: 22px;
+    --r-row: 14px;
+    --r-chip: 12px;
+    --r-pill: 20px;
+
+    --gap-1: 6px;
+    --gap-2: 8px;
+    --gap-3: 12px;
+    --gap-4: 16px;
+    --gap-5: 20px;
+    --gap-6: 24px;
+    --gap-7: 32px;
+
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overscroll-behavior: none;
+  }
+
+  body {
+    max-width: var(--col-max);
+    margin: 0 auto;
+    padding: var(--pad-y) var(--pad-x) var(--pad-bottom);
+    position: relative;
+    min-height: 100vh;
+  }
+
+  button {
+    font-family: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  input, textarea {
+    font-family: inherit;
+    color: inherit;
+    background: var(--surface-2);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+    padding: 10px 12px;
+    width: 100%;
+    font-size: 14px;
+  }
+
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent-dim);
+  }
+
+  /* ───── Header ───── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+    gap: var(--gap-4);
+  }
+
+  .header-left { display: flex; align-items: baseline; gap: 10px; }
+  .header-back {
+    width: 32px; height: 32px;
+    margin-left: -6px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-2);
+  }
+  .header-back svg { width: 22px; height: 22px; fill: currentColor; }
+
+  .app-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+  }
+
+  .view-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+  }
+
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--gap-1);
+  }
+
+  .session-label {
+    font-size: 11px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .menu-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-2);
+    border-radius: 50%;
+  }
+  .menu-btn:active { background: var(--surface-2); }
+  .menu-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+  /* ───── STAGE ───── */
+  .stage {
+    background: var(--surface-1);
+    border-radius: var(--r-card);
+    margin-bottom: var(--gap-6);
+    position: relative;
+    overflow: hidden;
+    transition: background 0.3s ease;
+  }
+
+  /* Idle / Listening shared shell */
+  .stage.idle, .stage.listening {
+    padding: 40px 28px 36px;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .stage-state {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 500;
+    margin-bottom: 32px;
+  }
+
+  .stage.listening .stage-state {
+    color: var(--accent-warm);
+    animation: state-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes state-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  /* Pulse rings */
+  .pulse-ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    border: 2px solid var(--accent-warm);
+    transform: translate(-50%, -50%);
+    margin-top: -28px;
+    animation: pulse 1.6s ease-out infinite;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .stage.listening .pulse-ring { opacity: 1; }
+  .pulse-ring.d1 { animation-delay: 0.5s; }
+  .pulse-ring.d2 { animation-delay: 1.0s; }
+
+  @keyframes pulse {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+  }
+
+  .mic-button {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.4);
+    transition: transform 0.15s ease;
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 2;
+    cursor: pointer;
+  }
+  .mic-button:active { transform: scale(0.95); }
+  .mic-button:disabled { opacity: 0.85; cursor: default; }
+  .mic-button svg { width: 36px; height: 36px; fill: var(--text-1); }
+
+  .stage-prompt {
+    font-size: 17px;
+    color: var(--text-1);
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .stage-hint {
+    font-size: 13px;
+    color: var(--text-2);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    min-height: 18px;
+  }
+
+  /* Waveform */
+  .waveform {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 24px;
+    margin-bottom: 10px;
+  }
+  .stage.listening .waveform { display: flex; }
+
+  .wave-bar {
+    width: 3px;
+    background: var(--accent-warm);
+    border-radius: 2px;
+    animation: wave 1.2s ease-in-out infinite;
+  }
+  .wave-bar:nth-child(1) { height: 8px;  animation-delay: 0s; }
+  .wave-bar:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+  .wave-bar:nth-child(3) { height: 22px; animation-delay: 0.2s; }
+  .wave-bar:nth-child(4) { height: 18px; animation-delay: 0.3s; }
+  .wave-bar:nth-child(5) { height: 24px; animation-delay: 0.4s; }
+  .wave-bar:nth-child(6) { height: 14px; animation-delay: 0.5s; }
+  .wave-bar:nth-child(7) { height: 20px; animation-delay: 0.6s; }
+  .wave-bar:nth-child(8) { height: 10px; animation-delay: 0.7s; }
+  .wave-bar:nth-child(9) { height: 16px; animation-delay: 0.8s; }
+
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.4); }
+    50%      { transform: scaleY(1); }
+  }
+
+  /* Identified */
+  .stage.identified {
+    padding: 24px 24px 22px;
+    animation: stageResolve 0.5s ease-out;
+  }
+
+  @keyframes stageResolve {
+    0%   { opacity: 0; transform: translateY(4px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .stage-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+
+  .stage-top .stage-state { margin-bottom: 0; }
+
+  .relisten-btn {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .relisten-btn:active { background: var(--surface-3); }
+  .relisten-btn svg { width: 16px; height: 16px; fill: var(--text-2); }
+
+  .stage-track {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-1);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 4px;
+  }
+
+  .stage-artist {
+    font-size: 15px;
+    color: var(--text-2);
+    font-weight: 500;
+    margin-bottom: 22px;
+  }
+
+  .stage-meta {
+    display: flex;
+    gap: var(--gap-4);
+    align-items: stretch;
+  }
+
+  .meta-block {
+    flex: 1;
+    background: var(--surface-2);
+    border-radius: var(--r-chip);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 72px;
+  }
+
+  .meta-block.camelot {
+    flex: 1.2;
+    background: rgba(230, 57, 70, 0.12);
+    border: 1px solid rgba(230, 57, 70, 0.3);
+  }
+
+  .meta-label {
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .meta-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    font-family: var(--mono);
+  }
+
+  .meta-value.accent { color: var(--accent); }
+
+  .meta-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 2px;
+  }
+
+  .energy-dots {
+    display: flex;
+    gap: 3px;
+    margin-top: 4px;
+  }
+
+  .energy-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--surface-3);
+  }
+  .energy-dot.on { background: var(--accent); }
+
+  .stage-empty-meta {
+    margin-top: 14px;
+    color: var(--text-3);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  /* Miss state */
+  .stage.miss {
+    padding: 40px 28px 36px;
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .stage.miss .stage-state { color: var(--accent-dim); }
+
+  /* ───── Section headers ───── */
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0 4px 12px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+
+  .section-meta {
+    font-size: 11px;
+    color: var(--text-3);
+    font-weight: 400;
+  }
+
+  /* ───── RAIL ───── */
+  .rail { margin-bottom: var(--gap-6); }
+
+  .rail-empty {
+    background: var(--surface-1);
+    border-radius: 18px;
+    padding: 28px 24px;
+    color: var(--text-2);
+    font-size: 14px;
+    text-align: center;
+    font-style: italic;
+  }
+
+  .rail-skeleton {
+    background: var(--surface-1);
+    border-radius: var(--r-row);
+    padding: 16px 18px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .skel-meta {
+    background: var(--surface-2);
+    border-radius: 4px;
+    height: 14px; width: 38px;
+    animation: shimmer 2.4s ease-in-out infinite;
+  }
+  .skel-block { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .skel-line {
+    background: var(--surface-2);
+    border-radius: 4px;
+    height: 10px;
+    animation: shimmer 2.4s ease-in-out infinite;
+  }
+  .skel-line.short { width: 40%; }
+  .skel-line.medium { width: 65%; }
+  .skel-line.long { width: 80%; }
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 0.85; }
+  }
+
+  .rail-item {
+    background: var(--surface-1);
+    border-radius: var(--r-row);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .rail-item:active { background: var(--surface-2); transform: scale(0.995); }
+  .rail-item.long-pressing { background: var(--accent-dim); }
+  .rail-item.played-next { background: rgba(230, 57, 70, 0.18); }
+
+  .rail-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    align-self: flex-start;
+    margin-top: 6px;
+  }
+  .rail-title-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1px;
+  }
+  .rail-stars {
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .rail-stars .stars-empty { color: var(--text-3); }
+
+  .rail-rank {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-3);
+    width: 22px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--mono);
+  }
+  .rail-item.rank-best .rail-rank { color: var(--accent); }
+
+  .rail-info { flex: 1; min-width: 0; }
+  .rail-title {
+    font-size: 14px;
+    color: var(--text-1);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+  }
+  .rail-artist {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+  }
+  .rail-tag {
+    font-size: 9px;
+    color: var(--text-2);
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: 6px;
+    line-height: 1.4;
+    text-transform: lowercase;
+  }
+
+  .rail-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 52px;
+  }
+  .rail-key {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: var(--mono);
+    line-height: 1;
+  }
+  .rail-bpm {
+    font-size: 11px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    font-family: var(--mono);
+  }
+
+  /* Rail expansion (score breakdown) */
+  .rail-detail {
+    padding: 0 16px 14px;
+    margin-top: -4px;
+    margin-bottom: 8px;
+    background: var(--surface-1);
+    border-radius: 0 0 var(--r-row) var(--r-row);
+    color: var(--text-2);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .rail-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-top: 1px solid var(--divider);
+  }
+  .rail-detail-row:first-child { border-top: none; }
+  .rail-detail-key { color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; font-weight: 600; }
+  .rail-detail-val { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ───── LOG ───── */
+  .log { margin-bottom: var(--gap-6); }
+
+  .log-item {
+    background: var(--surface-1);
+    border-radius: var(--r-row);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .log-item:active { background: var(--surface-2); }
+  .log-item.current { box-shadow: inset 0 0 0 1px var(--accent-dim); }
+
+  .log-time {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 64px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .log-info { flex: 1; min-width: 0; }
+  .log-title {
+    font-size: 14px;
+    color: var(--text-1);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .log-artist {
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-star-btn {
+    font-size: 16px;
+    color: var(--accent);
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+  }
+  .log-star-btn:active { background: var(--surface-2); }
+  .log-star-btn.empty { color: var(--text-3); }
+
+  .empty-log {
+    background: var(--surface-1);
+    border-radius: 14px;
+    padding: 20px;
+    color: var(--text-3);
+    font-size: 13px;
+    text-align: center;
+    font-style: italic;
+  }
+
+  /* ───── Library view ───── */
+  .lib-search {
+    margin-bottom: var(--gap-4);
+  }
+  .lib-search input { background: var(--surface-1); border-color: transparent; }
+
+  .lib-filters {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    margin-bottom: var(--gap-4);
+    padding-bottom: 4px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .lib-filters::-webkit-scrollbar { display: none; }
+  .filter-chip {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    background: var(--surface-1);
+    border-radius: var(--r-pill);
+    font-size: 11px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .filter-chip.active { background: var(--accent); color: var(--text-1); }
+
+  .lib-row {
+    background: var(--surface-1);
+    border-radius: var(--r-row);
+    padding: 12px 16px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .lib-row-stats { padding-top: 2px; }
+  .lib-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    align-self: flex-start;
+    margin-top: 6px;
+  }
+  .lib-row-title-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1px;
+  }
+  .lib-row-stars {
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .lib-row-stars .stars-empty {
+    color: var(--text-3);
+  }
+  .lib-row-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .lib-tag {
+    font-size: 10px;
+    color: var(--text-2);
+    background: var(--surface-2);
+    padding: 2px 7px;
+    border-radius: 8px;
+    line-height: 1.4;
+  }
+  .lib-row-info { flex: 1; min-width: 0; }
+  .lib-row-title {
+    font-size: 14px; color: var(--text-1); font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .lib-row-artist {
+    font-size: 12px; color: var(--text-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .lib-row-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 52px; }
+  .lib-row-key {
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    font-family: var(--mono); line-height: 1;
+  }
+  .lib-row-bpm {
+    font-size: 11px; color: var(--text-2);
+    font-variant-numeric: tabular-nums; font-family: var(--mono);
+  }
+
+  .lib-count {
+    color: var(--text-3);
+    font-size: 12px;
+    text-align: center;
+    padding: 14px 0;
+  }
+
+  /* ───── Setup view ───── */
+  .setup-card {
+    background: var(--surface-1);
+    border-radius: var(--r-card);
+    padding: 20px;
+    margin-bottom: var(--gap-4);
+  }
+  .setup-h {
+    font-size: 13px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .setup-p {
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .setup-field { margin-bottom: 12px; }
+  .setup-field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .setup-note {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+  .setup-btn {
+    background: var(--accent);
+    color: var(--text-1);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    width: 100%;
+    text-align: center;
+  }
+  .setup-btn:active { background: var(--accent-dim); }
+  .setup-btn.secondary {
+    background: var(--surface-2);
+    color: var(--text-1);
+  }
+  .setup-btn.secondary:active { background: var(--surface-3); }
+
+  .setup-credit {
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+    text-align: center;
+    padding: 16px 0;
+  }
+  .setup-credit a { color: var(--text-2); text-decoration: underline; }
+
+  .setup-toggle {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--divider);
+  }
+  .setup-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+  }
+  .setup-toggle-label {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-1);
+  }
+  .toggle-switch {
+    width: 44px;
+    height: 26px;
+    border-radius: 13px;
+    background: var(--surface-3);
+    position: relative;
+    transition: background 0.18s ease;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .toggle-switch[aria-checked="true"] { background: var(--accent); }
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--text-1);
+    transition: transform 0.18s ease;
+  }
+  .toggle-switch[aria-checked="true"] .toggle-thumb {
+    transform: translateX(18px);
+  }
+
+  .usage-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .usage-stat {
+    background: var(--surface-2);
+    border-radius: var(--r-chip);
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .usage-label {
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .usage-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-1);
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .usage-sub {
+    font-size: 11px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+  }
+
+  /* ───── Sheets ───── */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+
+  .sheet {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translate(-50%, 100%);
+    width: 100%;
+    max-width: var(--col-max);
+    max-height: 85vh;
+    background: var(--surface-1);
+    border-radius: var(--r-card) var(--r-card) 0 0;
+    z-index: 51;
+    transition: transform 0.28s cubic-bezier(0.16, 0.84, 0.4, 1);
+    overflow-y: auto;
+    padding: 16px 20px 32px;
+  }
+  .sheet.open { transform: translate(-50%, 0); }
+
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--surface-3);
+    border-radius: 2px;
+    margin: 0 auto 14px;
+  }
+
+  .sheet-h {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-1);
+    margin-bottom: 14px;
+  }
+
+  .sheet-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--divider);
+    cursor: pointer;
+  }
+  .sheet-row:last-child { border-bottom: none; }
+  .sheet-row:active { background: var(--surface-2); }
+  .sheet-row-label {
+    flex: 1;
+    font-size: 15px;
+    color: var(--text-1);
+  }
+  .sheet-row-meta { font-size: 12px; color: var(--text-3); }
+  .sheet-row svg { width: 16px; height: 16px; fill: var(--text-3); }
+
+  /* Catch detail */
+  .catch-track {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-1);
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .catch-artist {
+    font-size: 14px;
+    color: var(--text-2);
+    margin-bottom: 16px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translate(-50%, 20px);
+    background: var(--surface-3);
+    color: var(--text-1);
+    padding: 10px 18px;
+    border-radius: var(--r-pill);
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  /* Played-next confirmation modal */
+  .modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.65);
+  }
+  .modal.open { display: flex; }
+  .modal-box {
+    background: var(--surface-2);
+    border-radius: 18px;
+    padding: 24px;
+    width: 100%;
+    max-width: 360px;
+  }
+  .modal-h {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 8px;
+  }
+  .modal-p {
+    font-size: 14px;
+    color: var(--text-2);
+    line-height: 1.45;
+    margin-bottom: 20px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .modal-btn {
+    flex: 1;
+    padding: 11px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .modal-btn.primary { background: var(--accent); color: var(--text-1); }
+  .modal-btn.cancel { background: var(--surface-3); color: var(--text-2); }
+
+  /* Utility */
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <button class="header-back" id="backBtn" hidden aria-label="Back">
+      <svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
+    <h1 class="app-title" id="appTitle">Crate</h1>
+  </div>
+  <div class="header-right">
+    <span class="session-label" id="sessionLabel">Practice · —</span>
+    <button class="menu-btn" id="menuBtn" aria-label="Menu">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- HOME VIEW -->
+<main id="homeView">
+  <section class="stage" id="stage">
+    <!-- rendered by render() -->
+  </section>
+
+  <section class="rail" id="railSection">
+    <div class="section-header">
+      <span class="section-title">Rail</span>
+      <span class="section-meta" id="railMeta"></span>
+    </div>
+    <div id="railBody"></div>
+  </section>
+
+  <section class="log" id="logSection">
+    <div class="section-header">
+      <span class="section-title">Log</span>
+      <span class="section-meta" id="logMeta"></span>
+    </div>
+    <div id="logBody"></div>
+  </section>
+</main>
+
+<!-- LIBRARY VIEW -->
+<main id="libraryView" hidden>
+  <div class="lib-search">
+    <input type="search" id="libSearch" placeholder="Search titles, artists, keys…" autocomplete="off">
+  </div>
+  <div class="lib-filters" id="libFilters">
+    <button class="filter-chip active" data-filter="all">All</button>
+    <button class="filter-chip" data-filter="txt">TXT-enriched</button>
+    <button class="filter-chip" data-filter="colored">Color-tagged</button>
+    <button class="filter-chip" data-filter="rated4">★4+</button>
+    <button class="filter-chip" data-filter="rated5">★5</button>
+    <button class="filter-chip" data-filter="starred">Starred catches</button>
+    <button class="filter-chip" data-filter="100-120">100–120 BPM</button>
+    <button class="filter-chip" data-filter="120-130">120–130 BPM</button>
+    <button class="filter-chip" data-filter="130+">130+ BPM</button>
+  </div>
+  <div id="libBody"></div>
+  <div class="lib-count" id="libCount"></div>
+</main>
+
+<!-- SETUP VIEW -->
+<main id="setupView" hidden>
+  <div class="setup-card">
+    <div class="setup-h">Your Library</div>
+    <p class="setup-p">Import a Rekordbox XML export. Crate parses it in the browser — no upload required. Re-imports update by Rekordbox ID.</p>
+    <input type="file" id="rbFile" accept=".xml" style="display:none">
+    <input type="file" id="rbTxtFile" accept=".txt,.tsv" style="display:none">
+    <button class="setup-btn" id="rbImportBtn">Import Rekordbox XML</button>
+    <button class="setup-btn secondary" id="rbTxtImportBtn" style="margin-top:8px">Merge TXT (for MyTags)</button>
+    <div class="setup-note" id="rbStatus"></div>
+
+    <div class="setup-toggle">
+      <div class="setup-h" style="margin-bottom:10px">Inspect a track</div>
+      <input type="text" id="inspectInput" placeholder="Type part of the title…">
+      <div class="setup-note" id="inspectResult" style="margin-top:10px;font-family:var(--mono);font-size:11px;line-height:1.6;white-space:pre-wrap;color:var(--text-2)"></div>
+    </div>
+
+    <div class="setup-toggle" id="scopeToggle">
+      <div class="setup-toggle-row">
+        <span class="setup-toggle-label">Rank against color-tagged only</span>
+        <button class="toggle-switch" id="scopeBtn" role="switch" aria-checked="false">
+          <span class="toggle-thumb"></span>
+        </button>
+      </div>
+      <div class="setup-note" id="scopeNote">—</div>
+      <div class="setup-toggle-row" style="margin-top:14px">
+        <span class="setup-toggle-label">Rank against TXT-enriched only</span>
+        <button class="toggle-switch" id="txtScopeBtn" role="switch" aria-checked="false">
+          <span class="toggle-thumb"></span>
+        </button>
+      </div>
+      <div class="setup-note" id="txtScopeNote">—</div>
+    </div>
+  </div>
+
+  <div class="setup-card">
+    <div class="setup-h">Account</div>
+    <p class="setup-p">Sign in to sync your catches and history across the suite. Email magic-link, same as the other apps.</p>
+    <div class="setup-field">
+      <label>Supabase URL</label>
+      <input type="text" id="supaUrl" placeholder="https://xxx.supabase.co" autocomplete="off">
+    </div>
+    <div class="setup-field">
+      <label>Supabase anon key</label>
+      <input type="password" id="supaKey" placeholder="eyJ…" autocomplete="off">
+    </div>
+    <button class="setup-btn secondary" id="saveSupa">Save credentials</button>
+    <div class="setup-note">Stored locally. Auth wiring lands when the Phase 1 backend is live.</div>
+  </div>
+
+  <div class="setup-card">
+    <div class="setup-h">Metadata</div>
+    <p class="setup-p">When the ACR returns an ISRC, Crate hits GetSongBPM directly for key/BPM/energy. SoundNet is the paid fallback.</p>
+    <div class="setup-field">
+      <label>GetSongBPM API key</label>
+      <input type="password" id="gsbKey" placeholder="optional in mock mode" autocomplete="off">
+    </div>
+    <div class="setup-field">
+      <label>RapidAPI key (SoundNet fallback)</label>
+      <input type="password" id="snKey" placeholder="optional" autocomplete="off">
+    </div>
+    <button class="setup-btn secondary" id="saveMeta">Save keys</button>
+  </div>
+
+  <div class="setup-card">
+    <div class="setup-h">ACR</div>
+    <p class="setup-p">AudD recognition runs server-side via the <code>acr-recognize</code> Edge Function. The API key lives on the server, not in this bundle.</p>
+    <div class="setup-note">Provider: AudD (v1). The <code>acr_provider</code> column lets us A/B against ACRCloud later.</div>
+
+    <div class="setup-toggle">
+      <div class="setup-h" style="margin-bottom:10px">Recognition usage</div>
+      <div class="usage-grid">
+        <div class="usage-stat">
+          <span class="usage-label">All time</span>
+          <span class="usage-value" id="usageTotal">0</span>
+          <span class="usage-sub" id="usageTotalCost">$0.00</span>
+        </div>
+        <div class="usage-stat">
+          <span class="usage-label">This month</span>
+          <span class="usage-value" id="usageMonth">0</span>
+          <span class="usage-sub" id="usageMonthCost">$0.00</span>
+        </div>
+        <div class="usage-stat">
+          <span class="usage-label">Last 24h</span>
+          <span class="usage-value" id="usageDay">0</span>
+          <span class="usage-sub" id="usageDayCost">$0.00</span>
+        </div>
+      </div>
+      <div class="setup-field" style="margin-top:14px">
+        <label>Cost per recognition (USD)</label>
+        <input type="number" step="0.0001" min="0" id="auddRate" placeholder="0.001">
+        <div class="setup-note">AudD: ~$0.002 per call, $0.001 on the 1K plan, $0.0005 on the 10K plan.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="setup-credit">
+    Music metadata powered by <a href="https://getsongbpm.com" target="_blank" rel="noopener">GetSongBPM</a>.
+  </div>
+</main>
+
+<!-- MENU SHEET -->
+<div class="sheet-backdrop" id="menuBackdrop"></div>
+<aside class="sheet" id="menuSheet" role="dialog" aria-label="Menu">
+  <div class="sheet-handle"></div>
+  <div class="sheet-row" data-nav="library">
+    <span class="sheet-row-label">Crate library</span>
+    <span class="sheet-row-meta" id="menuLibCount">—</span>
+    <svg viewBox="0 0 24 24"><path d="M9.41 16.59 10.83 18l6-6-6-6L9.41 7.41 13.83 12z"/></svg>
+  </div>
+  <div class="sheet-row" data-nav="setup">
+    <span class="sheet-row-label">Setup</span>
+    <svg viewBox="0 0 24 24"><path d="M9.41 16.59 10.83 18l6-6-6-6L9.41 7.41 13.83 12z"/></svg>
+  </div>
+  <div class="sheet-row" data-action="clear-session">
+    <span class="sheet-row-label">Clear this session</span>
+    <span class="sheet-row-meta" id="menuClearMeta">—</span>
+  </div>
+</aside>
+
+<!-- CATCH DETAIL SHEET -->
+<div class="sheet-backdrop" id="catchBackdrop"></div>
+<aside class="sheet" id="catchSheet" role="dialog" aria-label="Catch detail">
+  <div class="sheet-handle"></div>
+  <div id="catchBody"></div>
+</aside>
+
+<!-- PLAYED-NEXT MODAL -->
+<div class="modal" id="playedModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <div class="modal-h" id="playedTitle">Played this next?</div>
+    <p class="modal-p" id="playedBody">Log this transition into <strong></strong>.</p>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" id="playedCancel">Cancel</button>
+      <button class="modal-btn primary" id="playedConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+//==============================================================
+// CRATE — Phase 1 UI shell with mock data
+//==============================================================
+
+// ── Config ─────────────────────────────────────────────────────
+const CONFIG = {
+  weights: { key: 0.35, bpm: 0.25, energy: 0.20, tags: 0.15, freshness: 0.05 },
+  bpmTolerance: { perfect: 0.03, zero: 0.08 },
+  railSize: 5,
+  sessionWindowMs: 24 * 60 * 60 * 1000,
+  listenDurationMs: 10000,
+  longPressMs: 500,
+  storeKey: 'crate.v1'
+};
+
+// ── Mock data ─────────────────────────────────────────────────
+
+// User's mock crate library — diverse keys/BPMs so ranking has interesting options.
+const MOCK_CRATE = [
+  { id: 'c01', title: 'Acid Eiffel',            artist: 'Choice',                     bpm: 124, key_camelot: '8A',  key_musical: 'A min',  energy: 7, tags: ['acid','house','classic'] },
+  { id: 'c02', title: 'Voodoo Ray',             artist: 'A Guy Called Gerald',        bpm: 125, key_camelot: '9A',  key_musical: 'E min',  energy: 7, tags: ['acid','house','classic'] },
+  { id: 'c03', title: 'Plastic Dreams',         artist: 'Jaydee',                     bpm: 121, key_camelot: '8A',  key_musical: 'A min',  energy: 6, tags: ['house','organ','classic'] },
+  { id: 'c04', title: 'Music Sounds Better',    artist: 'Stardust',                   bpm: 123, key_camelot: '8B',  key_musical: 'C maj',  energy: 7, tags: ['house','french'] },
+  { id: 'c05', title: 'Knights of the Jaguar',  artist: 'DJ Rolando',                 bpm: 126, key_camelot: '7A',  key_musical: 'D min',  energy: 8, tags: ['techno','detroit'] },
+  { id: 'c06', title: 'Energy Flash',           artist: 'Joey Beltram',               bpm: 130, key_camelot: '6A',  key_musical: 'G min',  energy: 9, tags: ['techno','rave','classic'] },
+  { id: 'c07', title: 'The Bells',              artist: 'Jeff Mills',                 bpm: 138, key_camelot: '10A', key_musical: 'B min',  energy: 9, tags: ['techno','peak'] },
+  { id: 'c08', title: 'LFO',                    artist: 'LFO',                        bpm: 123, key_camelot: '4A',  key_musical: 'F min',  energy: 7, tags: ['bleep','classic'] },
+  { id: 'c09', title: 'Pacific State',          artist: '808 State',                  bpm: 120, key_camelot: '10A', key_musical: 'B min',  energy: 6, tags: ['house','melodic','classic'] },
+  { id: 'c10', title: 'Where Love Lives',       artist: 'Alison Limerick',            bpm: 124, key_camelot: '11B', key_musical: 'F maj',  energy: 7, tags: ['house','vocal','classic'] },
+  { id: 'c11', title: 'Good Life',              artist: 'Inner City',                 bpm: 124, key_camelot: '6B',  key_musical: 'A♭ maj', energy: 7, tags: ['house','vocal','classic'] },
+  { id: 'c12', title: 'Sueño Latino',           artist: 'Sueño Latino',               bpm: 123, key_camelot: '4B',  key_musical: 'A♭ maj', energy: 6, tags: ['house','balearic'] },
+  { id: 'c13', title: 'Untitled (Workshop 19)', artist: 'Move D',                     bpm: 122, key_camelot: '7B',  key_musical: 'A maj',  energy: 5, tags: ['deep','dub'] },
+  { id: 'c14', title: 'bb',                     artist: 'Yaeji',                      bpm: 124, key_camelot: '6A',  key_musical: 'G min',  energy: 6, tags: ['house','vocal','modern'] },
+  { id: 'c15', title: '808',                    artist: 'Yaeji',                      bpm: 120, key_camelot: '8B',  key_musical: 'C maj',  energy: 5, tags: ['house','modern'] },
+  { id: 'c16', title: 'Around The World',       artist: 'Daft Punk',                  bpm: 121, key_camelot: '1A',  key_musical: 'A♭ min', energy: 7, tags: ['house','french','classic'] },
+  { id: 'c17', title: 'Da Funk',                artist: 'Daft Punk',                  bpm: 110, key_camelot: '12A', key_musical: 'D♭ min', energy: 6, tags: ['house','french','classic'] },
+  { id: 'c18', title: 'Xtal',                   artist: 'Aphex Twin',                 bpm: 110, key_camelot: '11A', key_musical: 'A♭ min', energy: 4, tags: ['ambient','idm'] },
+  { id: 'c19', title: 'Inner City Life',        artist: 'Goldie',                     bpm: 162, key_camelot: '7A',  key_musical: 'D min',  energy: 7, tags: ['dnb','jungle'] },
+  { id: 'c20', title: 'Untrue',                 artist: 'Burial',                     bpm: 130, key_camelot: '5A',  key_musical: 'C min',  energy: 5, tags: ['dubstep','garage'] },
+  { id: 'c21', title: 'Big Fun',                artist: 'Inner City',                 bpm: 122, key_camelot: '9B',  key_musical: 'B maj',  energy: 7, tags: ['house','vocal','classic'] },
+  { id: 'c22', title: 'Drowning in a Sea of Love', artist: 'Frankie Knuckles',        bpm: 122, key_camelot: '9B',  key_musical: 'B maj',  energy: 6, tags: ['house','vocal'] },
+  { id: 'c23', title: 'Stand on the Word',      artist: 'Joubert Singers',            bpm: 117, key_camelot: '7B',  key_musical: 'A maj',  energy: 6, tags: ['gospel','house','classic'] },
+  { id: 'c24', title: 'Strings of Life',        artist: 'Rhythim Is Rhythim',         bpm: 123, key_camelot: '8A',  key_musical: 'A min',  energy: 7, tags: ['techno','detroit','classic'] }
+];
+
+// Pool of mock "wild" tracks that ACR catches (not necessarily in user's crate).
+const MOCK_WILD = [
+  { title: 'Strings of Life',        artist: 'Rhythim Is Rhythim',     bpm: 123, key_camelot: '8A',  key_musical: 'A min', energy: 7 },
+  { title: 'Cherry Pop',             artist: 'Yaeji',                  bpm: 118, key_camelot: '5A',  key_musical: 'C min', energy: 6 },
+  { title: 'Caribou Drum',           artist: 'Caribou',                bpm: 121, key_camelot: '8A',  key_musical: 'A min', energy: 6 },
+  { title: 'Sirens',                 artist: 'Nicolas Jaar',           bpm: 119, key_camelot: '4B',  key_musical: 'A♭ maj', energy: 5 },
+  { title: 'Midnight Operator',      artist: 'Floating Points',        bpm: 125, key_camelot: '7A',  key_musical: 'D min', energy: 7 },
+  { title: 'Lone Star',              artist: 'Norma Jean Bell',        bpm: 124, key_camelot: '9A',  key_musical: 'E min', energy: 7 },
+  { title: 'Drum thing — unreleased',artist: 'Unknown',                bpm: null,key_camelot: null,  key_musical: null,    energy: null },
+  { title: 'Plastic Spider',         artist: 'DJ Tennis',              bpm: 126, key_camelot: '6A',  key_musical: 'G min', energy: 8 },
+  { title: 'Slow Motion',            artist: 'Pépé Bradock',           bpm: 122, key_camelot: '8B',  key_musical: 'C maj', energy: 6 },
+  { title: 'Yacht Music',            artist: 'Avalon Emerson',         bpm: 128, key_camelot: '10A', key_musical: 'B min', energy: 8 }
+];
+
+let wildCursor = 0;
+
+// ── State ─────────────────────────────────────────────────────
+const state = {
+  view: 'home',                    // home | library | setup
+  stageMode: 'idle',               // idle | listening | identified | miss
+  currentCatch: null,              // active caught track on stage
+  catches: [],                     // all catches (persisted)
+  history: [],                     // played-next transitions
+  crate: MOCK_CRATE.slice(),       // full imported library
+  crateScope: 'all',               // 'all' | 'colored' — what the rail ranks against
+  crateRequireTxt: false,          // when true, rail only draws from TXT-enriched tracks
+  rail: [],                        // current rail (computed)
+  expandedRailId: null,
+  libFilter: 'all',
+  libQuery: '',
+  mode: 'practice'
+};
+
+// Returns the subset of the library the rail should rank against.
+function effectiveCrate() {
+  let pool = state.crate;
+  if (state.crateScope === 'colored') pool = pool.filter(t => t.colour);
+  if (state.crateRequireTxt)          pool = pool.filter(t => t.txt_enriched);
+  return pool;
+}
+
+// ── Persistence ───────────────────────────────────────────────
+function load() {
+  try {
+    const raw = localStorage.getItem(CONFIG.storeKey);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d.catches)   state.catches  = d.catches;
+    if (d.history)   state.history  = d.history;
+    if (d.crate && d.crate.length) state.crate = d.crate;
+    if (d.crateScope) state.crateScope = d.crateScope;
+    if (typeof d.crateRequireTxt === 'boolean') state.crateRequireTxt = d.crateRequireTxt;
+    if (d.mode)      state.mode     = d.mode;
+  } catch (e) { console.warn('Crate: load failed', e); }
+}
+
+function save() {
+  try {
+    localStorage.setItem(CONFIG.storeKey, JSON.stringify({
+      catches: state.catches,
+      history: state.history,
+      crate: state.crate,
+      crateScope: state.crateScope,
+      crateRequireTxt: state.crateRequireTxt,
+      mode: state.mode
+    }));
+  } catch (e) { console.warn('Crate: save failed', e); }
+}
+
+// ── Camelot wheel ─────────────────────────────────────────────
+// Camelot: 1A–12A (minor inner ring), 1B–12B (major outer ring).
+// Same key      → 1.0
+// Adjacent ±1 (same letter) or relative major/minor (same number) → 0.8
+// Energy boost (+7 same letter) → 0.6
+// Else → 0
+function parseCamelot(c) {
+  if (!c) return null;
+  const m = /^(\d{1,2})([AB])$/i.exec(String(c).trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  if (n < 1 || n > 12) return null;
+  return { n, l: m[2].toUpperCase() };
+}
+
+function keyCompat(targetC, sourceC) {
+  const t = parseCamelot(targetC);
+  const s = parseCamelot(sourceC);
+  if (!t || !s) return 0;
+  if (t.n === s.n && t.l === s.l) return 1.0;
+
+  const diff = Math.abs(t.n - s.n);
+  const wheelAdj = diff === 1 || diff === 11; // wrap
+  const adjacent = wheelAdj && t.l === s.l;
+  const relative = t.n === s.n && t.l !== s.l;
+  if (adjacent || relative) return 0.8;
+
+  const forward = ((t.n - s.n + 12) % 12);
+  const energyBoost = forward === 7 && t.l === s.l;
+  if (energyBoost) return 0.6;
+
+  return 0;
+}
+
+// ── Ranking helpers ───────────────────────────────────────────
+function bpmCompat(target, source) {
+  if (!target || !source) return 0;
+  const pct = Math.abs(target - source) / source;
+  if (pct <= CONFIG.bpmTolerance.perfect) return 1.0;
+  if (pct >= CONFIG.bpmTolerance.zero) return 0;
+  return 1.0 - (pct - CONFIG.bpmTolerance.perfect) /
+               (CONFIG.bpmTolerance.zero - CONFIG.bpmTolerance.perfect);
+}
+
+function energyMatch(target, source) {
+  if (target == null || source == null) return 0.5;
+  return 1 - Math.min(Math.abs(target - source) / 10, 1);
+}
+
+function tagOverlap(a, b) {
+  if (!a || !b || !a.length || !b.length) return 0;
+  const sa = new Set(a);
+  let inter = 0;
+  for (const t of b) if (sa.has(t)) inter++;
+  const union = new Set([...a, ...b]).size;
+  return union ? inter / union : 0;
+}
+
+function freshness(_) {
+  // v1: no per-track lastPlayed yet — flat 1.0 keeps the term neutral.
+  return 1.0;
+}
+
+function scoreTransition(source, target) {
+  const k = keyCompat(target.key_camelot, source.key_camelot);
+  const b = bpmCompat(target.bpm, source.bpm);
+  const e = energyMatch(target.energy, source.energy);
+  const t = tagOverlap(target.tags || [], source.tags || []);
+  const f = freshness(target);
+  const w = CONFIG.weights;
+  return {
+    total: w.key*k + w.bpm*b + w.energy*e + w.tags*t + w.freshness*f,
+    breakdown: { key: k, bpm: b, energy: e, tags: t, freshness: f }
+  };
+}
+
+function reasonFor(source, target, breakdown) {
+  if (!source.key_camelot || !source.bpm) return 'Fit unknown — caught track missing metadata';
+  const parts = [];
+  const t = parseCamelot(target.key_camelot), s = parseCamelot(source.key_camelot);
+  if (t && s) {
+    if (t.n === s.n && t.l === s.l) parts.push('Same key');
+    else if (t.n === s.n) parts.push(`Relative ${t.l === 'B' ? 'major' : 'minor'} (${target.key_camelot})`);
+    else if (breakdown.key === 0.8) parts.push(`Adjacent key (${target.key_camelot})`);
+    else if (breakdown.key === 0.6) parts.push(`Energy boost (${target.key_camelot})`);
+    else parts.push(`Key ${target.key_camelot}`);
+  }
+  if (target.bpm && source.bpm) {
+    const d = target.bpm - source.bpm;
+    if (d === 0) parts.push('same BPM');
+    else if (Math.abs(d) <= 4) parts.push(`${d > 0 ? '+' : ''}${d} BPM`);
+    else parts.push(`${d > 0 ? '+' : ''}${d} BPM`);
+  }
+  if (target.energy != null && source.energy != null) {
+    const de = target.energy - source.energy;
+    if (de >= 2) parts.push('lifts the energy');
+    else if (de <= -2) parts.push('cooldown move');
+    else if (Math.abs(de) <= 1) parts.push('holds the energy');
+  }
+  return parts.join(', ');
+}
+
+function rankRail(source) {
+  if (!source.key_camelot && !source.bpm) return [];
+  const scored = effectiveCrate()
+    .map(t => {
+      const s = scoreTransition(source, t);
+      return { track: t, score: s.total, breakdown: s.breakdown };
+    })
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, CONFIG.railSize);
+
+  return scored.map((x, i) => ({
+    rank: i + 1,
+    track: x.track,
+    score: x.score,
+    breakdown: x.breakdown,
+    reason: reasonFor(source, x.track, x.breakdown)
+  }));
+}
+
+// ── Time helpers ──────────────────────────────────────────────
+function relativeTime(ms) {
+  const delta = Date.now() - ms;
+  if (delta < 60_000) return 'just now';
+  if (delta < 3600_000) return `${Math.floor(delta / 60_000)}m ago`;
+  if (delta < 86_400_000) return `${Math.floor(delta / 3600_000)}h ago`;
+  return `${Math.floor(delta / 86_400_000)}d ago`;
+}
+
+function formatClock(ms) {
+  const d = new Date(ms);
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}:${m}${ampm}`;
+}
+
+function sessionCatches() {
+  const cutoff = Date.now() - CONFIG.sessionWindowMs;
+  return state.catches.filter(c => c.heard_at >= cutoff);
+}
+
+// ── Rendering ─────────────────────────────────────────────────
+function renderHeader() {
+  const sess = sessionCatches();
+  const modeLabel = state.mode[0].toUpperCase() + state.mode.slice(1);
+  document.getElementById('sessionLabel').textContent = `${modeLabel} · ${formatClock(Date.now())}`;
+  document.getElementById('menuLibCount').textContent = `${state.crate.length} tracks`;
+  document.getElementById('menuClearMeta').textContent = sess.length ? `${sess.length} catches` : 'empty';
+
+  const isHome = state.view === 'home';
+  document.getElementById('backBtn').hidden = isHome;
+  document.getElementById('appTitle').textContent =
+    state.view === 'library' ? 'Library' :
+    state.view === 'setup'   ? 'Setup' : 'Crate';
+}
+
+function renderStage() {
+  const el = document.getElementById('stage');
+  el.className = `stage ${state.stageMode}`;
+
+  if (state.stageMode === 'idle') {
+    el.innerHTML = `
+      <span class="stage-state">Ready</span>
+      <button class="mic-button" id="micBtn" aria-label="Start listening">
+        ${micSvg()}
+      </button>
+      <p class="stage-prompt">Tap to catch a track</p>
+      <p class="stage-hint">Hold near the source for 10 seconds</p>
+    `;
+  } else if (state.stageMode === 'listening') {
+    el.innerHTML = `
+      <span class="stage-state">Listening…</span>
+      <div class="pulse-ring"></div>
+      <div class="pulse-ring d1"></div>
+      <div class="pulse-ring d2"></div>
+      <button class="mic-button" disabled aria-label="Listening">
+        ${micSvg()}
+      </button>
+      <div class="waveform">
+        ${'<span class="wave-bar"></span>'.repeat(9)}
+      </div>
+      <p class="stage-hint" id="stageHint">0s</p>
+    `;
+  } else if (state.stageMode === 'miss') {
+    el.innerHTML = `
+      <span class="stage-state">Miss</span>
+      <button class="mic-button" id="micBtn" aria-label="Try again">
+        ${micSvg()}
+      </button>
+      <p class="stage-prompt">Couldn't catch that one.</p>
+      <p class="stage-hint">Tap to try again</p>
+    `;
+  } else if (state.stageMode === 'identified' && state.currentCatch) {
+    const c = state.currentCatch;
+    const hasMeta = c.bpm || c.key_camelot;
+    el.innerHTML = `
+      <div class="stage-top">
+        <span class="stage-state">Caught it</span>
+        <button class="relisten-btn" id="relistenBtn" aria-label="Listen again">
+          <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4a8 8 0 100 16c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+      </div>
+      <h2 class="stage-track">${escapeHtml(c.title)}</h2>
+      <p class="stage-artist">${escapeHtml(c.artist)}</p>
+      ${hasMeta ? `
+        <div class="stage-meta">
+          <div class="meta-block camelot">
+            <span class="meta-label">Key</span>
+            <span class="meta-value accent">${c.key_camelot || '—'}</span>
+            <span class="meta-sub">${escapeHtml(c.key_musical || '')}</span>
+          </div>
+          <div class="meta-block">
+            <span class="meta-label">BPM</span>
+            <span class="meta-value">${c.bpm ?? '—'}</span>
+            <span class="meta-sub">4/4</span>
+          </div>
+          <div class="meta-block">
+            <span class="meta-label">Energy</span>
+            <div class="energy-dots">
+              ${renderEnergyDots(c.energy)}
+            </div>
+            <span class="meta-sub">${c.energy != null ? `${c.energy} / 10` : '—'}</span>
+          </div>
+        </div>
+      ` : `<p class="stage-empty-meta">No metadata — can't rank.</p>`}
+    `;
+  }
+}
+
+function renderEnergyDots(level) {
+  if (level == null) return '';
+  let dots = '';
+  for (let i = 1; i <= 10; i++) {
+    dots += `<span class="energy-dot${i <= level ? ' on' : ''}"></span>`;
+  }
+  return dots;
+}
+
+function renderRail() {
+  const body = document.getElementById('railBody');
+  const meta = document.getElementById('railMeta');
+
+  if (state.stageMode === 'idle') {
+    meta.textContent = '';
+    body.innerHTML = `<div class="rail-empty">Catch a track to see what fits</div>`;
+    return;
+  }
+  if (state.stageMode === 'listening') {
+    meta.textContent = '';
+    body.innerHTML = Array.from({ length: 3 }, () => `
+      <div class="rail-skeleton">
+        <span class="skel-meta"></span>
+        <div class="skel-block">
+          <div class="skel-line long"></div>
+          <div class="skel-line medium"></div>
+        </div>
+      </div>
+    `).join('');
+    return;
+  }
+  if (state.stageMode === 'miss') {
+    meta.textContent = '';
+    body.innerHTML = `<div class="rail-empty">Nothing to rank against — try again.</div>`;
+    return;
+  }
+
+  // identified
+  if (!state.rail.length) {
+    meta.textContent = '';
+    body.innerHTML = `<div class="rail-empty">No metadata — can't rank.</div>`;
+    return;
+  }
+
+  meta.textContent = `${state.rail.length} from your Crate fit`;
+  body.innerHTML = state.rail.map((r, i) => {
+    const isBest = i === 0;
+    const isExpanded = state.expandedRailId === r.track.id;
+    const playedThisOne = state.currentCatch && state.history.some(
+      h => h.source_caught_track_id === state.currentCatch.id && h.target_crate_track_id === r.track.id
+    );
+    return `
+      <div class="rail-item ${isBest ? 'rank-best' : ''} ${playedThisOne ? 'played-next' : ''}"
+           data-rail-id="${r.track.id}">
+        <span class="rail-rank">${r.rank}</span>
+        <span class="rail-color-dot" style="background:${colourToCss(r.track.colour)}"></span>
+        <div class="rail-info">
+          <div class="rail-title-line">
+            <span class="rail-title">${escapeHtml(r.track.title)}${playedThisOne ? ' · played' : ''}</span>
+            ${r.track.rating ? `<span class="rail-stars">${'★'.repeat(r.track.rating)}<span class="stars-empty">${'☆'.repeat(5 - r.track.rating)}</span></span>` : ''}
+          </div>
+          <div class="rail-artist">${escapeHtml(r.track.artist || '')}</div>
+          ${r.track.tags && r.track.tags.length ? `<div class="rail-tags">${r.track.tags.slice(0, 5).map(tag => `<span class="rail-tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+        </div>
+        <div class="rail-stats">
+          <span class="rail-key">${r.track.key_camelot || '—'}</span>
+          <span class="rail-bpm">${r.track.bpm || '—'}</span>
+        </div>
+      </div>
+      ${isExpanded ? renderRailDetail(r) : ''}
+    `;
+  }).join('');
+}
+
+function renderRailDetail(r) {
+  const b = r.breakdown;
+  return `
+    <div class="rail-detail">
+      <div class="rail-detail-row"><span class="rail-detail-key">Score</span><span class="rail-detail-val">${(r.score * 100).toFixed(0)}</span></div>
+      <div class="rail-detail-row"><span class="rail-detail-key">Key</span><span class="rail-detail-val">${(b.key * 100).toFixed(0)}</span></div>
+      <div class="rail-detail-row"><span class="rail-detail-key">BPM</span><span class="rail-detail-val">${(b.bpm * 100).toFixed(0)}</span></div>
+      <div class="rail-detail-row"><span class="rail-detail-key">Energy</span><span class="rail-detail-val">${(b.energy * 100).toFixed(0)}</span></div>
+      <div class="rail-detail-row"><span class="rail-detail-key">Tags</span><span class="rail-detail-val">${(b.tags * 100).toFixed(0)}</span></div>
+      <div class="rail-detail-row" style="color:var(--text-3)">
+        <span class="rail-detail-key">Long-press to mark played</span>
+        <span class="rail-detail-val">${r.track.key_camelot || '—'} · ${r.track.bpm || '—'}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderLog() {
+  const body = document.getElementById('logBody');
+  const meta = document.getElementById('logMeta');
+  const sess = sessionCatches();
+
+  meta.textContent = sess.length
+    ? `${sess.length} caught · this session`
+    : 'nothing caught yet';
+
+  if (!sess.length) {
+    body.innerHTML = `<div class="empty-log">No catches in the last 24h.</div>`;
+    return;
+  }
+
+  body.innerHTML = sess.map(c => {
+    const isCurrent = state.currentCatch && c.id === state.currentCatch.id;
+    return `
+      <div class="log-item ${isCurrent ? 'current' : ''}" data-catch-id="${c.id}">
+        <span class="log-time">${relativeTime(c.heard_at)}</span>
+        <div class="log-info">
+          <div class="log-title">${escapeHtml(c.title)}</div>
+          <div class="log-artist">${escapeHtml(c.artist)}</div>
+        </div>
+        <button class="log-star-btn ${c.starred ? '' : 'empty'}" data-star-id="${c.id}" aria-label="${c.starred ? 'Unstar' : 'Star'}">
+          ${c.starred ? '★' : '☆'}
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLibrary() {
+  const body = document.getElementById('libBody');
+  const count = document.getElementById('libCount');
+
+  const q = state.libQuery.trim().toLowerCase();
+  const f = state.libFilter;
+  const starredIds = new Set(state.catches.filter(c => c.starred).map(c => c.title + '|' + c.artist));
+
+  let rows = state.crate.filter(t => {
+    if (q) {
+      const hay = `${t.title} ${t.artist} ${t.key_camelot || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (f === '100-120' && !(t.bpm >= 100 && t.bpm < 120)) return false;
+    if (f === '120-130' && !(t.bpm >= 120 && t.bpm < 130)) return false;
+    if (f === '130+'    && !(t.bpm >= 130)) return false;
+    if (f === 'txt'     && !t.txt_enriched) return false;
+    if (f === 'colored' && !t.colour) return false;
+    if (f === 'rated4'  && (t.rating || 0) < 4) return false;
+    if (f === 'rated5'  && (t.rating || 0) < 5) return false;
+    if (f === 'starred' && !starredIds.has(t.title + '|' + t.artist)) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => (a.bpm || 0) - (b.bpm || 0));
+
+  body.innerHTML = rows.map(t => `
+    <div class="lib-row">
+      <span class="lib-color-dot" style="background:${colourToCss(t.colour)}"></span>
+      <div class="lib-row-info">
+        <div class="lib-row-title-line">
+          <span class="lib-row-title">${escapeHtml(t.title)}</span>
+          ${t.rating ? `<span class="lib-row-stars">${'★'.repeat(t.rating)}<span class="stars-empty">${'☆'.repeat(5 - t.rating)}</span></span>` : ''}
+        </div>
+        <div class="lib-row-artist">${escapeHtml(t.artist)}</div>
+        ${t.tags && t.tags.length ? `<div class="lib-row-tags">${t.tags.slice(0, 4).map(tag => `<span class="lib-tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="lib-row-stats">
+        <span class="lib-row-key">${t.key_camelot || '—'}</span>
+        <span class="lib-row-bpm">${t.bpm || '—'}</span>
+      </div>
+    </div>
+  `).join('');
+
+  const scopeNote = state.crateScope === 'colored' ? ' · ranking: tagged only' : '';
+  count.textContent = `${rows.length} of ${state.crate.length} tracks${scopeNote}`;
+}
+
+const REKORDBOX_COLOURS = {
+  '0xFF007F': '#FF66B2',
+  '0xFF0000': '#E63946',
+  '0xFFA500': '#FFA500',
+  '0xFFFF00': '#FFD93D',
+  '0x00FF00': '#6BCB77',
+  '0x25FDE9': '#4FD1C5',
+  '0x0000FF': '#4A90E2',
+  '0x660099': '#9B59B6'
+};
+
+function syncUsageUI() {
+  const totalEl = document.getElementById('usageTotal');
+  if (!totalEl) return;
+  const rate = parseFloat(localStorage.getItem('crate.audd.rate') || '0.001') || 0;
+  const now = Date.now();
+  const monthCutoff = new Date();
+  monthCutoff.setDate(1); monthCutoff.setHours(0,0,0,0);
+  const dayCutoff = now - 86_400_000;
+  const total = state.catches.length;
+  const month = state.catches.filter(c => c.heard_at >= monthCutoff.getTime()).length;
+  const day   = state.catches.filter(c => c.heard_at >= dayCutoff).length;
+  totalEl.textContent = total;
+  document.getElementById('usageMonth').textContent = month;
+  document.getElementById('usageDay').textContent = day;
+  document.getElementById('usageTotalCost').textContent = `$${(total * rate).toFixed(2)}`;
+  document.getElementById('usageMonthCost').textContent = `$${(month * rate).toFixed(2)}`;
+  document.getElementById('usageDayCost').textContent   = `$${(day   * rate).toFixed(2)}`;
+}
+
+function syncScopeUI() {
+  const btn = document.getElementById('scopeBtn');
+  const note = document.getElementById('scopeNote');
+  if (!btn || !note) return;
+  const tagged = state.crate.filter(t => t.colour).length;
+  const total = state.crate.length;
+  const on = state.crateScope === 'colored';
+  btn.setAttribute('aria-checked', on ? 'true' : 'false');
+  note.textContent = on
+    ? `Color filter on: ${tagged} tagged (of ${total}).`
+    : `Color filter off: all ${total} tracks (${tagged} tagged).`;
+
+  const txtBtn = document.getElementById('txtScopeBtn');
+  const txtNote = document.getElementById('txtScopeNote');
+  if (txtBtn && txtNote) {
+    const enriched = state.crate.filter(t => t.txt_enriched).length;
+    const txtOn = !!state.crateRequireTxt;
+    txtBtn.setAttribute('aria-checked', txtOn ? 'true' : 'false');
+    const pool = effectiveCrate().length;
+    txtNote.textContent = txtOn
+      ? `TXT filter on: ${enriched} enriched. Effective pool: ${pool} tracks.`
+      : `TXT filter off: ${enriched} of ${total} are enriched.`;
+  }
+}
+
+const COLOUR_NAMES = {
+  pink:   '#FF66B2',
+  red:    '#E63946',
+  orange: '#FFA500',
+  yellow: '#FFD93D',
+  green:  '#6BCB77',
+  aqua:   '#4FD1C5',
+  blue:   '#4A90E2',
+  purple: '#9B59B6'
+};
+
+function colourToCss(c) {
+  if (!c) return 'transparent';
+  const u = String(c).toUpperCase();
+  if (REKORDBOX_COLOURS[u]) return REKORDBOX_COLOURS[u];
+  const named = COLOUR_NAMES[String(c).toLowerCase()];
+  if (named) return named;
+  const m = /^0x([0-9a-fA-F]{6})$/.exec(c);
+  if (m) return '#' + m[1];
+  return c;
+}
+
+function micSvg() {
+  return `<svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function render() {
+  document.getElementById('homeView').hidden    = state.view !== 'home';
+  document.getElementById('libraryView').hidden = state.view !== 'library';
+  document.getElementById('setupView').hidden   = state.view !== 'setup';
+
+  renderHeader();
+  if (state.view === 'home') {
+    renderStage();
+    renderRail();
+    renderLog();
+    bindHomeEvents();
+  } else if (state.view === 'library') {
+    renderLibrary();
+  } else if (state.view === 'setup') {
+    syncScopeUI();
+    syncUsageUI();
+  }
+}
+
+// ── Catch flow ───────────────────────────────────────────────
+let listenTimer = null;
+let listenCountdownTimer = null;
+
+function startListening() {
+  if (state.stageMode === 'listening') return;
+  state.stageMode = 'listening';
+  state.expandedRailId = null;
+  render();
+
+  const start = Date.now();
+  listenCountdownTimer = setInterval(() => {
+    const sec = Math.floor((Date.now() - start) / 1000);
+    const hint = document.getElementById('stageHint');
+    if (hint) hint.textContent = `${sec}s`;
+  }, 200);
+
+  listenTimer = setTimeout(() => {
+    clearInterval(listenCountdownTimer);
+    resolveListen();
+  }, CONFIG.listenDurationMs);
+}
+
+function resolveListen() {
+  // Mock ACR: ~15% miss rate, otherwise pull next wild track.
+  const miss = Math.random() < 0.15;
+  if (miss) {
+    state.stageMode = 'miss';
+    state.currentCatch = null;
+    state.rail = [];
+    render();
+    return;
+  }
+
+  const wild = MOCK_WILD[wildCursor % MOCK_WILD.length];
+  wildCursor++;
+
+  const c = {
+    id: `c_${Date.now()}_${Math.floor(Math.random() * 9999)}`,
+    title: wild.title,
+    artist: wild.artist,
+    bpm: wild.bpm,
+    key_camelot: wild.key_camelot,
+    key_musical: wild.key_musical,
+    energy: wild.energy,
+    starred: false,
+    note: '',
+    heard_at: Date.now(),
+    acr_provider: 'audd-mock'
+  };
+
+  state.catches.unshift(c);
+  state.currentCatch = c;
+  state.stageMode = 'identified';
+  state.rail = rankRail(c);
+  save();
+  render();
+}
+
+function restoreToStage(catchId) {
+  const c = state.catches.find(x => x.id === catchId);
+  if (!c) return;
+  state.currentCatch = c;
+  state.stageMode = 'identified';
+  state.rail = rankRail(c);
+  state.expandedRailId = null;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleStar(catchId) {
+  const c = state.catches.find(x => x.id === catchId);
+  if (!c) return;
+  c.starred = !c.starred;
+  save();
+  toast(c.starred ? 'Saved to starred' : 'Unstarred');
+  render();
+}
+
+// ── Played-next flow ────────────────────────────────────────
+let pendingPlayed = null;
+
+function openPlayedConfirm(trackId) {
+  if (!state.currentCatch) return;
+  const target = state.crate.find(t => t.id === trackId);
+  if (!target) return;
+  pendingPlayed = { source: state.currentCatch, target };
+
+  document.getElementById('playedTitle').textContent = 'Played this next?';
+  document.getElementById('playedBody').innerHTML =
+    `Log <strong>${escapeHtml(target.title)}</strong> as the next track into <strong>${escapeHtml(state.currentCatch.title)}</strong>.`;
+  document.getElementById('playedModal').classList.add('open');
+}
+
+function confirmPlayed() {
+  if (!pendingPlayed) return;
+  state.history.unshift({
+    id: `h_${Date.now()}`,
+    source_caught_track_id: pendingPlayed.source.id,
+    target_crate_track_id: pendingPlayed.target.id,
+    mixed_at: Date.now()
+  });
+  save();
+  toast(`Played next: ${pendingPlayed.target.title}`);
+  pendingPlayed = null;
+  closePlayedConfirm();
+  render();
+}
+
+function closePlayedConfirm() {
+  document.getElementById('playedModal').classList.remove('open');
+  pendingPlayed = null;
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ── Long-press ────────────────────────────────────────────────
+function bindLongPress(el, ms, onLong) {
+  let timer, didLong = false, downX = 0, downY = 0;
+  const start = (e) => {
+    didLong = false;
+    el.classList.add('long-pressing');
+    const pt = e.touches ? e.touches[0] : e;
+    downX = pt.clientX; downY = pt.clientY;
+    timer = setTimeout(() => {
+      didLong = true;
+      el.classList.remove('long-pressing');
+      try { navigator.vibrate?.(15); } catch {}
+      onLong(e);
+    }, ms);
+  };
+  const cancel = () => {
+    el.classList.remove('long-pressing');
+    clearTimeout(timer);
+  };
+  const move = (e) => {
+    const pt = e.touches ? e.touches[0] : e;
+    if (Math.hypot(pt.clientX - downX, pt.clientY - downY) > 8) cancel();
+  };
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchcancel', cancel);
+  el.addEventListener('touchmove', move, { passive: true });
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', cancel);
+  el.addEventListener('mouseleave', cancel);
+  el.addEventListener('mousemove', (e) => { if (e.buttons) move(e); });
+  return () => didLong;
+}
+
+// ── Event binding ─────────────────────────────────────────────
+function bindHomeEvents() {
+  const mic = document.getElementById('micBtn');
+  if (mic) mic.addEventListener('click', startListening);
+
+  const relisten = document.getElementById('relistenBtn');
+  if (relisten) relisten.addEventListener('click', startListening);
+
+  document.querySelectorAll('.rail-item').forEach(el => {
+    const id = el.dataset.railId;
+    const wasLong = bindLongPress(el, CONFIG.longPressMs, () => {
+      openPlayedConfirm(id);
+    });
+    el.addEventListener('click', (e) => {
+      if (wasLong()) return; // long-press already handled
+      state.expandedRailId = (state.expandedRailId === id) ? null : id;
+      render();
+    });
+  });
+
+  document.querySelectorAll('.log-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      // Star button is inside log-item; handle separately
+      if (e.target.closest('[data-star-id]')) return;
+      restoreToStage(el.dataset.catchId);
+    });
+  });
+
+  document.querySelectorAll('[data-star-id]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleStar(el.dataset.starId);
+    });
+  });
+}
+
+function bindGlobalEvents() {
+  document.getElementById('menuBtn').addEventListener('click', openMenu);
+  document.getElementById('menuBackdrop').addEventListener('click', closeMenu);
+
+  document.getElementById('catchBackdrop').addEventListener('click', closeCatchSheet);
+
+  document.getElementById('backBtn').addEventListener('click', () => {
+    state.view = 'home';
+    render();
+  });
+
+  document.querySelectorAll('[data-nav]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.view = el.dataset.nav;
+      closeMenu();
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-action]').forEach(el => {
+    el.addEventListener('click', () => {
+      const a = el.dataset.action;
+      if (a === 'clear-session') {
+        if (!sessionCatches().length) { toast('Already empty'); return; }
+        if (!confirm('Clear all catches from the last 24h?')) return;
+        const cutoff = Date.now() - CONFIG.sessionWindowMs;
+        state.catches = state.catches.filter(c => c.heard_at < cutoff);
+        if (state.currentCatch && state.currentCatch.heard_at >= cutoff) {
+          state.currentCatch = null;
+          state.stageMode = 'idle';
+          state.rail = [];
+        }
+        save();
+        closeMenu();
+        render();
+        toast('Session cleared');
+      }
+    });
+  });
+
+  // Library
+  document.getElementById('libSearch').addEventListener('input', (e) => {
+    state.libQuery = e.target.value;
+    renderLibrary();
+  });
+  document.querySelectorAll('#libFilters .filter-chip').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('#libFilters .filter-chip').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      state.libFilter = c.dataset.filter;
+      renderLibrary();
+    });
+  });
+
+  // Setup
+  document.getElementById('rbImportBtn').addEventListener('click', () =>
+    document.getElementById('rbFile').click()
+  );
+  document.getElementById('rbFile').addEventListener('change', handleRekordboxImport);
+  document.getElementById('rbTxtImportBtn').addEventListener('click', () =>
+    document.getElementById('rbTxtFile').click()
+  );
+  document.getElementById('rbTxtFile').addEventListener('change', handleRekordboxTxtImport);
+
+  document.getElementById('scopeBtn').addEventListener('click', () => {
+    state.crateScope = state.crateScope === 'colored' ? 'all' : 'colored';
+    save();
+    if (state.currentCatch) state.rail = rankRail(state.currentCatch);
+    syncScopeUI();
+    render();
+  });
+
+  document.getElementById('txtScopeBtn').addEventListener('click', () => {
+    state.crateRequireTxt = !state.crateRequireTxt;
+    save();
+    if (state.currentCatch) state.rail = rankRail(state.currentCatch);
+    syncScopeUI();
+    render();
+  });
+
+  document.getElementById('saveSupa').addEventListener('click', () => {
+    const url = document.getElementById('supaUrl').value.trim();
+    const key = document.getElementById('supaKey').value.trim();
+    localStorage.setItem('crate.supabase.url', url);
+    localStorage.setItem('crate.supabase.key', key);
+    toast('Credentials saved');
+  });
+  document.getElementById('saveMeta').addEventListener('click', () => {
+    localStorage.setItem('crate.getsongbpm.key', document.getElementById('gsbKey').value.trim());
+    localStorage.setItem('crate.rapidapi.key',   document.getElementById('snKey').value.trim());
+    toast('Keys saved');
+  });
+
+  // Played modal
+  document.getElementById('playedCancel').addEventListener('click', closePlayedConfirm);
+  document.getElementById('playedConfirm').addEventListener('click', confirmPlayed);
+
+  // Keyboard escape closes sheets/modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    closeMenu();
+    closeCatchSheet();
+    closePlayedConfirm();
+  });
+}
+
+function openMenu() {
+  renderHeader(); // refresh counts
+  document.getElementById('menuBackdrop').classList.add('open');
+  document.getElementById('menuSheet').classList.add('open');
+}
+function closeMenu() {
+  document.getElementById('menuBackdrop').classList.remove('open');
+  document.getElementById('menuSheet').classList.remove('open');
+}
+function closeCatchSheet() {
+  document.getElementById('catchBackdrop').classList.remove('open');
+  document.getElementById('catchSheet').classList.remove('open');
+}
+
+// ── Rekordbox XML import ──────────────────────────────────────
+async function handleRekordboxImport(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const status = document.getElementById('rbStatus');
+  status.textContent = `Parsing ${file.name}…`;
+
+  try {
+    const text = await file.text();
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    if (doc.querySelector('parsererror')) throw new Error('Invalid XML');
+
+    const tracks = Array.from(doc.querySelectorAll('TRACK[TrackID]'));
+    if (!tracks.length) throw new Error('No <TRACK> nodes found');
+
+    UNMAPPED_KEYS.clear();
+    const parsed = tracks.map(t => {
+      const rawColour = t.getAttribute('Colour') || t.getAttribute('Color') || '';
+      const rawRating = parseInt(t.getAttribute('Rating') || '0', 10);
+      // Rekordbox stores rating as 0,51,102,153,204,255 → 0–5 stars.
+      const stars = Math.max(0, Math.min(5, Math.round(rawRating / 51)));
+      return {
+        id: 'rb_' + t.getAttribute('TrackID'),
+        rekordbox_id: t.getAttribute('TrackID'),
+        title: t.getAttribute('Name') || 'Untitled',
+        artist: t.getAttribute('Artist') || 'Unknown',
+        bpm: parseFloat(t.getAttribute('AverageBpm')) || null,
+        key_musical: t.getAttribute('Tonality') || null,
+        key_camelot: musicalToCamelot(t.getAttribute('Tonality')),
+        energy: null,
+        tags: [],
+        genre: t.getAttribute('Genre') || null,
+        rating: stars,
+        comments: t.getAttribute('Comments') || null,
+        colour: rawColour.trim() || null
+      };
+    }).filter(t => t.bpm); // skip tracks without BPM
+
+    const tagged = parsed.filter(t => t.colour).length;
+
+    // Dedupe by rekordbox_id (re-import semantics).
+    // Preserve TXT enrichment on existing rows (tags / rating / comments / txt_enriched).
+    const existing = new Map(state.crate.map(c => [c.id, c]));
+    for (const t of parsed) {
+      const prev = existing.get(t.id);
+      if (prev?.txt_enriched) {
+        const mergedTags = Array.from(new Set([...(t.tags || []), ...(prev.tags || [])]));
+        existing.set(t.id, {
+          ...t,
+          tags: mergedTags,
+          rating:  prev.rating  || t.rating,
+          comments: prev.comments || t.comments,
+          colour: t.colour || prev.colour,
+          txt_enriched: true
+        });
+      } else {
+        existing.set(t.id, t);
+      }
+    }
+    state.crate = Array.from(existing.values());
+    save();
+
+    const total = state.crate.length;
+    const totalTagged = state.crate.filter(t => t.colour).length;
+    const totalKeyed = state.crate.filter(t => t.key_camelot).length;
+    const unmappedSample = Array.from(UNMAPPED_KEYS).slice(0, 8);
+    let msg = `Imported ${parsed.length} tracks (${tagged} color-tagged). Library: ${total} tracks · ${totalKeyed} with key · ${totalTagged} tagged.`;
+    if (unmappedSample.length) {
+      msg += `<br><br><strong>Unmapped key formats:</strong> ${unmappedSample.map(escapeHtml).join(', ')}${UNMAPPED_KEYS.size > 8 ? ` (+${UNMAPPED_KEYS.size - 8} more)` : ''}`;
+      console.warn('Crate: unmapped keys', Array.from(UNMAPPED_KEYS));
+    }
+    status.innerHTML = msg;
+    toast(`${parsed.length} tracks imported`);
+  } catch (err) {
+    console.error(err);
+    status.textContent = `Failed: ${err.message}`;
+  } finally {
+    e.target.value = '';
+  }
+}
+
+// ── Rekordbox TXT import ──────────────────────────────────────
+// Merges into the existing library by title+artist. Pulls tags
+// from the Comments column (where Rekordbox routes MyTags when
+// included in TXT export).
+async function handleRekordboxTxtImport(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const status = document.getElementById('rbStatus');
+  status.textContent = `Parsing ${file.name}…`;
+
+  try {
+    const buf = await file.arrayBuffer();
+    const text = decodeRekordboxTxt(buf);
+    const lines = text.split(/\r?\n/).filter(l => l.length);
+    if (lines.length < 2) throw new Error('Not enough rows');
+
+    const headers = lines[0].split('\t').map(h => h.trim());
+    const idx = (...names) => {
+      for (const n of names) {
+        const i = headers.findIndex(h => h.toLowerCase() === n.toLowerCase());
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
+    const iTitle    = idx('Track Title','Title','Name','Trackname','Track Name');
+    const iArtist   = idx('Artist','Artist Name');
+    const iMyTag    = idx('My Tag','MyTag','My Tags','MyTags','Tags');
+    const iComments = idx('Comments','Comment');
+    const iGenre    = idx('Genre');
+    const iRating   = idx('Rating');
+    const iColour   = idx('Color','Colour');
+    const iBpm      = idx('BPM','Average BPM','AverageBpm');
+    const iKey      = idx('Key','Tonality');
+
+    if (iTitle < 0) throw new Error('Need Title column');
+    if (iMyTag < 0 && iComments < 0 && iGenre < 0) throw new Error('No My Tag, Comments, or Genre column');
+
+    const normKey = (title, artist) =>
+      (String(title || '') + '|' + String(artist || ''))
+        .toLowerCase()
+        .replace(/['’`"“”]/g, '')         // strip quotes/apostrophes
+        .replace(/[—–]/g, '-')             // unify dashes
+        .replace(/[^a-z0-9|]+/g, ' ')      // non-alphanumeric → space
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const lookup = new Map();
+    for (const t of state.crate) {
+      lookup.set(normKey(t.title, t.artist), t);
+    }
+
+    const unmatchedSamples = [];
+    let merged = 0, added = 0, withTags = 0;
+    for (let li = 1; li < lines.length; li++) {
+      const cols = lines[li].split('\t');
+      const title = (cols[iTitle] || '').trim();
+      const artist = (cols[iArtist] || '').trim();
+      if (!title || !artist) continue;
+
+      const myTagRaw    = iMyTag    >= 0 ? (cols[iMyTag]    || '').trim() : '';
+      const commentsRaw = iComments >= 0 ? (cols[iComments] || '').trim() : '';
+      const genreRaw    = iGenre    >= 0 ? (cols[iGenre]    || '').trim() : '';
+      const splitTags = (s) => s.split(/[,/]/).map(x => x.trim()).filter(Boolean);
+      // Only pull tags from My Tag (your curated taxonomy).
+      // Genre is excluded — it's auto-classification, not user intent.
+      let newTags = [];
+      if (myTagRaw)             newTags = splitTags(myTagRaw);
+      else if (commentsRaw && iMyTag < 0) newTags = splitTags(commentsRaw);
+
+      const ratingRaw = iRating >= 0 ? (cols[iRating] || '').trim() : '';
+      const stars = parseTxtRating(ratingRaw);
+      const colour = iColour >= 0 ? (cols[iColour] || '').trim() : '';
+
+      const key = normKey(title, artist);
+      const existing = lookup.get(key);
+
+      if (!existing && unmatchedSamples.length < 8) {
+        unmatchedSamples.push(`${title} — ${artist}`);
+      }
+
+      if (existing) {
+        // Replace tags with My Tag values (don't keep stale XML Genre tags).
+        if (newTags.length) {
+          existing.tags = newTags;
+          withTags++;
+        }
+        if (stars && !existing.rating) existing.rating = stars;
+        if (colour) existing.colour = colour;
+        if (commentsRaw && !existing.comments) existing.comments = commentsRaw;
+        existing.txt_enriched = true;
+        merged++;
+      } else {
+        const bpm = iBpm >= 0 ? parseFloat(cols[iBpm]) || null : null;
+        const keyRaw = iKey >= 0 ? cols[iKey] : null;
+        state.crate.push({
+          id: 'tx_' + (title + '|' + artist).replace(/[^a-z0-9]/gi, '').slice(0, 32) + '_' + li,
+          rekordbox_id: null,
+          title, artist, bpm,
+          key_musical: keyRaw,
+          key_camelot: musicalToCamelot(keyRaw),
+          energy: null,
+          tags: newTags,
+          rating: stars,
+          comments: commentsRaw || null,
+          colour: colour || null,
+          txt_enriched: true
+        });
+        added++;
+        if (newTags.length) withTags++;
+      }
+    }
+
+    save();
+    if (state.currentCatch) state.rail = rankRail(state.currentCatch);
+
+    // Sample of an enriched track so we can see what landed
+    const sample = state.crate.find(t => t.txt_enriched && t.tags && t.tags.length);
+    const colMap = `Title=col${iTitle}, Artist=col${iArtist}, MyTag=col${iMyTag}, Comments=col${iComments}, Genre=col${iGenre}, Rating=col${iRating}, Color=col${iColour}`;
+
+    status.innerHTML = `
+      <div><strong>Headers found:</strong> ${headers.map(escapeHtml).join(' · ') || '(none)'}</div>
+      <div style="margin-top:6px"><strong>Using:</strong> ${escapeHtml(colMap)}</div>
+      <div style="margin-top:6px"><strong>Result:</strong> Merged ${merged}, added ${added} new, ${withTags} got tags. Library: ${state.crate.length}.</div>
+      ${sample ? `<div style="margin-top:6px"><strong>Sample:</strong> "${escapeHtml(sample.title)}" — tags: ${sample.tags.slice(0, 6).map(escapeHtml).join(', ')}</div>` : `<div style="margin-top:6px;color:var(--accent)"><strong>No tags landed.</strong> Likely the Comments column in your TXT is empty, or column header isn't named "Comments". Check console.</div>`}
+      ${unmatchedSamples.length ? `<div style="margin-top:6px;color:var(--accent-warm)"><strong>${added} TXT rows didn't match anything in your XML library.</strong> First few unmatched: <em>${unmatchedSamples.map(escapeHtml).join(' · ')}</em></div>` : ''}
+    `;
+    console.log('Crate TXT import — headers:', headers);
+    console.log('Crate TXT import — first 3 rows parsed:',
+      lines.slice(1, 4).map(l => {
+        const c = l.split('\t');
+        return {
+          title: c[iTitle], artist: c[iArtist],
+          comments: iComments >= 0 ? c[iComments] : null,
+          genre: iGenre >= 0 ? c[iGenre] : null
+        };
+      })
+    );
+    toast(`${merged + added} tracks updated`);
+  } catch (err) {
+    console.error(err);
+    status.textContent = `TXT import failed: ${err.message}`;
+  } finally {
+    e.target.value = '';
+  }
+}
+
+function decodeRekordboxTxt(buf) {
+  const bytes = new Uint8Array(buf);
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+  // Heuristic: lots of zero bytes → UTF-16
+  let zeros = 0;
+  const sample = Math.min(bytes.length, 2048);
+  for (let i = 0; i < sample; i++) if (bytes[i] === 0) zeros++;
+  if (zeros / sample > 0.2) return new TextDecoder('utf-16le').decode(bytes);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+function parseTxtRating(s) {
+  if (!s) return 0;
+  const trimmed = s.trim();
+  const starCount = (trimmed.match(/[★*]/g) || []).length;
+  if (starCount) return Math.min(5, starCount);
+  const n = parseInt(trimmed, 10);
+  if (!isNaN(n)) {
+    if (n <= 5) return Math.max(0, n);
+    if (n <= 255) return Math.round(n / 51);
+  }
+  return 0;
+}
+
+// Rekordbox can export Tonality in several formats:
+//   musical ("Am", "F#m", "C", "Db"), Camelot ("8A", "11B"), Open Key ("8m", "8d"),
+//   with unicode sharps/flats (♯ ♭), or with "maj"/"min" spelled out.
+// This handles all of them.
+const CAMELOT_MAP = {
+  // Minors (inner ring, A)
+  'G#m':'1A','Abm':'1A',
+  'D#m':'2A','Ebm':'2A',
+  'A#m':'3A','Bbm':'3A',
+  'Fm':'4A',
+  'Cm':'5A',
+  'Gm':'6A',
+  'Dm':'7A',
+  'Am':'8A',
+  'Em':'9A',
+  'Bm':'10A',
+  'F#m':'11A','Gbm':'11A',
+  'C#m':'12A','Dbm':'12A',
+  // Majors (outer ring, B)
+  'B':'1B','Cb':'1B',
+  'F#':'2B','Gb':'2B',
+  'C#':'3B','Db':'3B',
+  'G#':'4B','Ab':'4B',
+  'D#':'5B','Eb':'5B',
+  'A#':'6B','Bb':'6B',
+  'F':'7B',
+  'C':'8B',
+  'G':'9B',
+  'D':'10B',
+  'A':'11B',
+  'E':'12B'
+};
+
+const UNMAPPED_KEYS = new Set(); // collected during import for diagnostic
+
+function musicalToCamelot(s) {
+  if (!s) return null;
+  let t = String(s).trim()
+    .replace(/♭/g, 'b')
+    .replace(/♯/g, '#')
+    .replace(/\s+/g, '')
+    .replace(/maj(or)?$/i, '')        // "Cmaj" → "C"
+    .replace(/min(or)?$/i, 'm');      // "Cmin" → "Cm"
+
+  // Already Camelot ("8A", "11B")
+  if (/^([1-9]|1[0-2])[AB]$/i.test(t)) return t.toUpperCase();
+
+  // Open Key ("8m" = 8A minor, "8d" = 8B major)
+  const ok = /^([1-9]|1[0-2])([md])$/i.exec(t);
+  if (ok) return ok[1] + (ok[2].toLowerCase() === 'm' ? 'A' : 'B');
+
+  // Normalize casing: first char uppercase (note letter), rest as-is
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+
+  const mapped = CAMELOT_MAP[t];
+  if (mapped) return mapped;
+
+  UNMAPPED_KEYS.add(s);
+  return null;
+}
+
+// ── Init ──────────────────────────────────────────────────────
+function init() {
+  load();
+
+  // Restore setup field values
+  document.getElementById('supaUrl').value = localStorage.getItem('crate.supabase.url') || '';
+  document.getElementById('supaKey').value = localStorage.getItem('crate.supabase.key') || '';
+  document.getElementById('gsbKey').value  = localStorage.getItem('crate.getsongbpm.key') || '';
+  document.getElementById('snKey').value   = localStorage.getItem('crate.rapidapi.key') || '';
+  document.getElementById('auddRate').value = localStorage.getItem('crate.audd.rate') || '0.001';
+  document.getElementById('auddRate').addEventListener('input', (e) => {
+    localStorage.setItem('crate.audd.rate', e.target.value);
+    syncUsageUI();
+  });
+  syncScopeUI();
+
+  // If most recent catch is within the session window, restore it to stage.
+  const mostRecent = sessionCatches()[0];
+  if (mostRecent) {
+    state.currentCatch = mostRecent;
+    state.stageMode = 'identified';
+    state.rail = rankRail(mostRecent);
+  }
+
+  bindGlobalEvents();
+  render();
+
+  // Update clock + relative times each minute
+  setInterval(() => {
+    if (state.view === 'home') render();
+    else renderHeader();
+  }, 60_000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
