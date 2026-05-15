@@ -1178,6 +1178,17 @@
     <div class="setup-note">Provider: AudD (v1). The <code>acr_provider</code> column lets us A/B against ACRCloud later.</div>
 
     <div class="setup-toggle">
+      <div class="setup-h" style="margin-bottom:10px">Direct-browser test mode</div>
+      <p class="setup-p">For prototyping only — calls AudD directly from the browser with the key below. Move to the Edge Function before sharing the URL with anyone.</p>
+      <div class="setup-field">
+        <label>AudD API token (test mode)</label>
+        <input type="password" id="auddToken" placeholder="paste here, never commit" autocomplete="off">
+      </div>
+      <button class="setup-btn secondary" id="saveAudd">Save AudD token</button>
+      <div class="setup-note" id="auddStatus"></div>
+    </div>
+
+    <div class="setup-toggle">
       <div class="setup-h" style="margin-bottom:10px">Recognition usage</div>
       <div class="usage-grid">
         <div class="usage-stat">
@@ -1876,9 +1887,13 @@ function render() {
 // ── Catch flow ───────────────────────────────────────────────
 let listenTimer = null;
 let listenCountdownTimer = null;
+let mediaRecorder = null;
+let mediaStream = null;
 
-function startListening() {
+async function startListening() {
   if (state.stageMode === 'listening') return;
+  const auddToken = localStorage.getItem('crate.audd.token');
+
   state.stageMode = 'listening';
   state.expandedRailId = null;
   render();
@@ -1890,14 +1905,150 @@ function startListening() {
     if (hint) hint.textContent = `${sec}s`;
   }, 200);
 
-  listenTimer = setTimeout(() => {
-    clearInterval(listenCountdownTimer);
-    resolveListen();
-  }, CONFIG.listenDurationMs);
+  if (auddToken) {
+    try {
+      await startRealCapture(auddToken);
+    } catch (err) {
+      console.error('Capture failed:', err);
+      clearInterval(listenCountdownTimer);
+      stopMedia();
+      state.stageMode = 'miss';
+      state.currentCatch = null;
+      state.rail = [];
+      render();
+      toast(err.message || 'Mic capture failed');
+    }
+  } else {
+    // Mock fallback when no token present
+    listenTimer = setTimeout(() => {
+      clearInterval(listenCountdownTimer);
+      resolveMockListen();
+    }, CONFIG.listenDurationMs);
+  }
 }
 
-function resolveListen() {
-  // Mock ACR: ~15% miss rate, otherwise pull next wild track.
+async function startRealCapture(auddToken) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Mic not available — needs HTTPS');
+  }
+  mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+  mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+
+  const chunks = [];
+  mediaRecorder.addEventListener('dataavailable', (e) => {
+    if (e.data.size) chunks.push(e.data);
+  });
+
+  const stopped = new Promise((resolve) => {
+    mediaRecorder.addEventListener('stop', () => resolve(new Blob(chunks, { type: mimeType || 'audio/webm' })));
+  });
+
+  mediaRecorder.start();
+  await new Promise(r => setTimeout(r, CONFIG.listenDurationMs));
+  mediaRecorder.stop();
+  const blob = await stopped;
+  stopMedia();
+  clearInterval(listenCountdownTimer);
+
+  // Tiny status update
+  const hint = document.getElementById('stageHint');
+  if (hint) hint.textContent = 'Identifying…';
+
+  const recognition = await callAudd(blob, auddToken);
+  if (!recognition) {
+    state.stageMode = 'miss';
+    state.currentCatch = null;
+    state.rail = [];
+    render();
+    return;
+  }
+
+  // Optional: enrich with GetSongBPM if ISRC + key present
+  let metadata = { bpm: null, key_camelot: null, key_musical: null, energy: null };
+  if (recognition.isrc) {
+    const gsbKey = localStorage.getItem('crate.getsongbpm.key');
+    if (gsbKey) {
+      try {
+        metadata = await lookupGetSongBpm(recognition.isrc, gsbKey) || metadata;
+      } catch (err) { console.warn('GetSongBPM lookup failed', err); }
+    }
+  }
+
+  const c = {
+    id: `c_${Date.now()}_${Math.floor(Math.random() * 9999)}`,
+    title: recognition.title,
+    artist: recognition.artist,
+    bpm: metadata.bpm,
+    key_camelot: metadata.key_camelot,
+    key_musical: metadata.key_musical,
+    energy: metadata.energy,
+    source_isrc: recognition.isrc || null,
+    starred: false,
+    note: '',
+    heard_at: Date.now(),
+    acr_provider: 'audd-direct',
+    acr_raw: recognition.raw
+  };
+
+  state.catches.unshift(c);
+  state.currentCatch = c;
+  state.stageMode = 'identified';
+  state.rail = rankRail(c);
+  save();
+  render();
+}
+
+function stopMedia() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  mediaRecorder = null;
+}
+
+async function callAudd(blob, token) {
+  const form = new FormData();
+  form.append('api_token', token);
+  form.append('file', blob, 'sample.webm');
+  form.append('return', 'isrc');
+  const res = await fetch('https://api.audd.io/', { method: 'POST', body: form });
+  if (!res.ok) throw new Error(`AudD error ${res.status}`);
+  const json = await res.json();
+  if (json.status !== 'success' || !json.result) return null;
+  return {
+    title:  json.result.title,
+    artist: json.result.artist,
+    isrc:   json.result.isrc || null,
+    raw:    json
+  };
+}
+
+async function lookupGetSongBpm(isrc, apiKey) {
+  // Returns { bpm, key_camelot, key_musical, energy } or null.
+  // GetSongBPM has rate limits; cache by ISRC in localStorage.
+  const cacheKey = `crate.gsb.${isrc}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return JSON.parse(cached);
+  const url = `https://api.getsong.co/song/?api_key=${encodeURIComponent(apiKey)}&isrc=${encodeURIComponent(isrc)}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const song = data?.song?.[0] || data?.song || null;
+  if (!song) return null;
+  const out = {
+    bpm: song.tempo ? Math.round(parseFloat(song.tempo)) : null,
+    key_musical: song.key_of || null,
+    key_camelot: musicalToCamelot(song.key_of || ''),
+    energy: null
+  };
+  try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
+  return out;
+}
+
+function resolveMockListen() {
   const miss = Math.random() < 0.15;
   if (miss) {
     state.stageMode = 'miss';
@@ -2158,6 +2309,13 @@ function bindGlobalEvents() {
     localStorage.setItem('crate.getsongbpm.key', document.getElementById('gsbKey').value.trim());
     localStorage.setItem('crate.rapidapi.key',   document.getElementById('snKey').value.trim());
     toast('Keys saved');
+  });
+
+  document.getElementById('saveAudd').addEventListener('click', () => {
+    const v = document.getElementById('auddToken').value.trim();
+    localStorage.setItem('crate.audd.token', v);
+    document.getElementById('auddStatus').textContent = v ? 'Token saved. Mic flow now uses real AudD.' : 'Token cleared. Mic falls back to mock.';
+    toast(v ? 'AudD token saved' : 'AudD token cleared');
   });
 
   // Played modal
@@ -2516,6 +2674,10 @@ function init() {
   document.getElementById('supaKey').value = localStorage.getItem('crate.supabase.key') || '';
   document.getElementById('gsbKey').value  = localStorage.getItem('crate.getsongbpm.key') || '';
   document.getElementById('snKey').value   = localStorage.getItem('crate.rapidapi.key') || '';
+  document.getElementById('auddToken').value = localStorage.getItem('crate.audd.token') || '';
+  if (document.getElementById('auddToken').value) {
+    document.getElementById('auddStatus').textContent = 'Mic flow uses real AudD.';
+  }
   document.getElementById('auddRate').value = localStorage.getItem('crate.audd.rate') || '0.001';
   document.getElementById('auddRate').addEventListener('input', (e) => {
     localStorage.setItem('crate.audd.rate', e.target.value);
