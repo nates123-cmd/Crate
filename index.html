@@ -154,8 +154,8 @@
     transition: background 0.3s ease;
   }
 
-  /* Idle / Listening shared shell */
-  .stage.idle, .stage.listening {
+  /* Idle / Listening / Identifying / Error shared shell */
+  .stage.idle, .stage.listening, .stage.identifying, .stage.error {
     padding: 40px 28px 36px;
     min-height: 280px;
     display: flex;
@@ -164,6 +164,31 @@
     justify-content: center;
     text-align: center;
   }
+
+  .stage.identifying .stage-state { color: var(--accent-warm); }
+  .stage.error .stage-state { color: var(--accent); }
+
+  .stop-btn {
+    margin-top: 22px;
+    background: var(--surface-2);
+    color: var(--text-1);
+    padding: 11px 22px;
+    border-radius: var(--r-pill);
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--divider);
+  }
+  .stop-btn:active { background: var(--surface-3); }
+
+  .identify-spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--surface-3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 24px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   .stage-state {
     font-size: 11px;
@@ -251,19 +276,27 @@
 
   .wave-bar {
     width: 3px;
+    height: 24px;
     background: var(--accent-warm);
     border-radius: 2px;
-    animation: wave 1.2s ease-in-out infinite;
+    transform: scaleY(0.15);
+    transform-origin: center;
+    transition: transform 0.08s linear;
   }
-  .wave-bar:nth-child(1) { height: 8px;  animation-delay: 0s; }
-  .wave-bar:nth-child(2) { height: 16px; animation-delay: 0.1s; }
-  .wave-bar:nth-child(3) { height: 22px; animation-delay: 0.2s; }
-  .wave-bar:nth-child(4) { height: 18px; animation-delay: 0.3s; }
-  .wave-bar:nth-child(5) { height: 24px; animation-delay: 0.4s; }
-  .wave-bar:nth-child(6) { height: 14px; animation-delay: 0.5s; }
-  .wave-bar:nth-child(7) { height: 20px; animation-delay: 0.6s; }
-  .wave-bar:nth-child(8) { height: 10px; animation-delay: 0.7s; }
-  .wave-bar:nth-child(9) { height: 16px; animation-delay: 0.8s; }
+  /* Mock/idle fallback: CSS-animated bars when not driven by the live meter */
+  .wave-bar.anim {
+    animation: wave 1.2s ease-in-out infinite;
+    transition: none;
+  }
+  .wave-bar.anim:nth-child(1) { animation-delay: 0s; }
+  .wave-bar.anim:nth-child(2) { animation-delay: 0.1s; }
+  .wave-bar.anim:nth-child(3) { animation-delay: 0.2s; }
+  .wave-bar.anim:nth-child(4) { animation-delay: 0.3s; }
+  .wave-bar.anim:nth-child(5) { animation-delay: 0.4s; }
+  .wave-bar.anim:nth-child(6) { animation-delay: 0.5s; }
+  .wave-bar.anim:nth-child(7) { animation-delay: 0.6s; }
+  .wave-bar.anim:nth-child(8) { animation-delay: 0.7s; }
+  .wave-bar.anim:nth-child(9) { animation-delay: 0.8s; }
 
   @keyframes wave {
     0%, 100% { transform: scaleY(0.4); }
@@ -1271,7 +1304,8 @@ const CONFIG = {
   bpmTolerance: { perfect: 0.03, zero: 0.08 },
   railSize: 5,
   sessionWindowMs: 24 * 60 * 60 * 1000,
-  listenDurationMs: 10000,
+  listenDurationMs: 12000,
+  minListenMs: 5000,
   longPressMs: 500,
   storeKey: 'crate.v1'
 };
@@ -1549,6 +1583,7 @@ function renderStage() {
       <p class="stage-hint">Hold near the source for 10 seconds</p>
     `;
   } else if (state.stageMode === 'listening') {
+    const liveMeter = !!mediaRecorder; // real capture drives bars; mock uses CSS anim
     el.innerHTML = `
       <span class="stage-state">Listening…</span>
       <div class="pulse-ring"></div>
@@ -1557,10 +1592,27 @@ function renderStage() {
       <button class="mic-button" disabled aria-label="Listening">
         ${micSvg()}
       </button>
-      <div class="waveform">
-        ${'<span class="wave-bar"></span>'.repeat(9)}
+      <div class="waveform" id="liveWaveform">
+        ${`<span class="wave-bar${liveMeter ? '' : ' anim'}"></span>`.repeat(9)}
       </div>
       <p class="stage-hint" id="stageHint">0s</p>
+      <button class="stop-btn" id="stopBtn">Stop &amp; identify</button>
+    `;
+  } else if (state.stageMode === 'identifying') {
+    el.innerHTML = `
+      <span class="stage-state">Identifying…</span>
+      <div class="identify-spinner"></div>
+      <p class="stage-prompt">Matching against AudD</p>
+      <p class="stage-hint">${escapeHtml(state.identifyHint || 'Hang tight')}</p>
+    `;
+  } else if (state.stageMode === 'error') {
+    el.innerHTML = `
+      <span class="stage-state">Couldn't identify</span>
+      <button class="mic-button" id="micBtn" aria-label="Try again">
+        ${micSvg()}
+      </button>
+      <p class="stage-prompt">${escapeHtml(state.stageError || 'Something went wrong')}</p>
+      <p class="stage-hint">Tap to try again</p>
     `;
   } else if (state.stageMode === 'miss') {
     el.innerHTML = `
@@ -1569,7 +1621,7 @@ function renderStage() {
         ${micSvg()}
       </button>
       <p class="stage-prompt">Couldn't catch that one.</p>
-      <p class="stage-hint">Tap to try again</p>
+      <p class="stage-hint">No match in AudD — tap to retry</p>
     `;
   } else if (state.stageMode === 'identified' && state.currentCatch) {
     const c = state.currentCatch;
@@ -1626,7 +1678,7 @@ function renderRail() {
     body.innerHTML = `<div class="rail-empty">Catch a track to see what fits</div>`;
     return;
   }
-  if (state.stageMode === 'listening') {
+  if (state.stageMode === 'listening' || state.stageMode === 'identifying') {
     meta.textContent = '';
     body.innerHTML = Array.from({ length: 3 }, () => `
       <div class="rail-skeleton">
@@ -1639,7 +1691,7 @@ function renderRail() {
     `).join('');
     return;
   }
-  if (state.stageMode === 'miss') {
+  if (state.stageMode === 'miss' || state.stageMode === 'error') {
     meta.textContent = '';
     body.innerHTML = `<div class="rail-empty">Nothing to rank against — try again.</div>`;
     return;
@@ -1889,37 +1941,38 @@ let listenTimer = null;
 let listenCountdownTimer = null;
 let mediaRecorder = null;
 let mediaStream = null;
+let audioCtx = null;
+let meterRAF = null;
+let manualStopFn = null;
+let realCaptureActive = false;
 
 async function startListening() {
-  if (state.stageMode === 'listening') return;
+  if (state.stageMode === 'listening' || state.stageMode === 'identifying') return;
   const auddToken = localStorage.getItem('crate.audd.token');
 
   state.stageMode = 'listening';
   state.expandedRailId = null;
-  render();
-
-  const start = Date.now();
-  listenCountdownTimer = setInterval(() => {
-    const sec = Math.floor((Date.now() - start) / 1000);
-    const hint = document.getElementById('stageHint');
-    if (hint) hint.textContent = `${sec}s`;
-  }, 200);
+  state.stageError = null;
+  render(); // immediate feedback while mic permission resolves
 
   if (auddToken) {
+    realCaptureActive = true;
     try {
       await startRealCapture(auddToken);
     } catch (err) {
       console.error('Capture failed:', err);
-      clearInterval(listenCountdownTimer);
-      stopMedia();
-      state.stageMode = 'miss';
+      cleanupCapture();
+      state.stageMode = 'error';
+      state.stageError = err.message || 'Mic capture failed';
       state.currentCatch = null;
       state.rail = [];
       render();
-      toast(err.message || 'Mic capture failed');
+      toast(state.stageError);
+    } finally {
+      realCaptureActive = false;
     }
   } else {
-    // Mock fallback when no token present
+    startCountdown();
     listenTimer = setTimeout(() => {
       clearInterval(listenCountdownTimer);
       resolveMockListen();
@@ -1927,9 +1980,41 @@ async function startListening() {
   }
 }
 
+function startCountdown() {
+  const start = Date.now();
+  clearInterval(listenCountdownTimer);
+  listenCountdownTimer = setInterval(() => {
+    const sec = Math.floor((Date.now() - start) / 1000);
+    const hint = document.getElementById('stageHint');
+    if (hint) hint.textContent = `${sec}s`;
+  }, 200);
+  return start;
+}
+
+function requestStopListening() {
+  if (realCaptureActive) {
+    if (manualStopFn) manualStopFn();
+    // else: recorder not armed yet — ignore, auto-timer still applies
+    return;
+  }
+  if (state.stageMode === 'listening') {
+    clearTimeout(listenTimer);
+    clearInterval(listenCountdownTimer);
+    resolveMockListen();
+  }
+}
+
+function cleanupCapture() {
+  clearInterval(listenCountdownTimer);
+  clearTimeout(listenTimer);
+  stopMeter();
+  stopMedia();
+  manualStopFn = null;
+}
+
 async function startRealCapture(auddToken) {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Mic not available — needs HTTPS');
+    throw new Error('Mic needs HTTPS — use the github.io URL, not the IP');
   }
   mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -1941,24 +2026,45 @@ async function startRealCapture(auddToken) {
   mediaRecorder.addEventListener('dataavailable', (e) => {
     if (e.data.size) chunks.push(e.data);
   });
-
   const stopped = new Promise((resolve) => {
     mediaRecorder.addEventListener('stop', () => resolve(new Blob(chunks, { type: mimeType || 'audio/webm' })));
   });
 
+  // mediaRecorder now exists → render listening with the live meter
+  render();
+  const start = startCountdown();
+  startMeter();
   mediaRecorder.start();
-  await new Promise(r => setTimeout(r, CONFIG.listenDurationMs));
+
+  // Resolve at max duration OR on manual stop (only after the min window)
+  await new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    const auto = setTimeout(finish, CONFIG.listenDurationMs);
+    manualStopFn = () => {
+      const elapsed = Date.now() - start;
+      if (elapsed < CONFIG.minListenMs) {
+        toast(`Keep holding — ${Math.ceil((CONFIG.minListenMs - elapsed) / 1000)}s more`);
+        return;
+      }
+      clearTimeout(auto);
+      finish();
+    };
+  });
+
+  manualStopFn = null;
+  clearInterval(listenCountdownTimer);
+  stopMeter();
   mediaRecorder.stop();
   const blob = await stopped;
   stopMedia();
-  clearInterval(listenCountdownTimer);
 
-  // Tiny status update
-  const hint = document.getElementById('stageHint');
-  if (hint) hint.textContent = 'Identifying…';
+  state.stageMode = 'identifying';
+  state.identifyHint = `${Math.round(blob.size / 1024)} KB captured`;
+  render();
 
   const recognition = await callAudd(blob, auddToken);
-  if (!recognition) {
+  if (recognition === null) {
     state.stageMode = 'miss';
     state.currentCatch = null;
     state.rail = [];
@@ -1966,15 +2072,16 @@ async function startRealCapture(auddToken) {
     return;
   }
 
-  // Optional: enrich with GetSongBPM if ISRC + key present
+  // Enrich with GetSongBPM (ISRC first, then title/artist search)
   let metadata = { bpm: null, key_camelot: null, key_musical: null, energy: null };
-  if (recognition.isrc) {
-    const gsbKey = localStorage.getItem('crate.getsongbpm.key');
-    if (gsbKey) {
-      try {
-        metadata = await lookupGetSongBpm(recognition.isrc, gsbKey) || metadata;
-      } catch (err) { console.warn('GetSongBPM lookup failed', err); }
-    }
+  const gsbKey = localStorage.getItem('crate.getsongbpm.key');
+  if (gsbKey) {
+    state.identifyHint = 'Looking up BPM / key…';
+    render();
+    try {
+      const m = await lookupGetSongBpm(recognition, gsbKey);
+      if (m) metadata = m;
+    } catch (err) { console.warn('GetSongBPM lookup failed', err); }
   }
 
   const c = {
@@ -2009,15 +2116,58 @@ function stopMedia() {
   mediaRecorder = null;
 }
 
+// Live audio meter — drives the waveform bars from real mic input
+function startMeter() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+    const srcNode = audioCtx.createMediaStreamSource(mediaStream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 64;
+    srcNode.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      const bars = document.querySelectorAll('#liveWaveform .wave-bar');
+      if (bars.length) {
+        const step = Math.max(1, Math.floor(data.length / bars.length));
+        bars.forEach((bar, i) => {
+          const v = data[i * step] / 255;
+          const scaled = 0.15 + Math.min(v * 1.9, 1) * 0.85;
+          bar.style.transform = `scaleY(${scaled.toFixed(3)})`;
+        });
+      }
+      meterRAF = requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) {
+    console.warn('Audio meter unavailable:', e);
+  }
+}
+
+function stopMeter() {
+  if (meterRAF) { cancelAnimationFrame(meterRAF); meterRAF = null; }
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+}
+
 async function callAudd(blob, token) {
   const form = new FormData();
   form.append('api_token', token);
   form.append('file', blob, 'sample.webm');
   form.append('return', 'isrc');
-  const res = await fetch('https://api.audd.io/', { method: 'POST', body: form });
-  if (!res.ok) throw new Error(`AudD error ${res.status}`);
+  let res;
+  try {
+    res = await fetch('https://api.audd.io/', { method: 'POST', body: form });
+  } catch (e) {
+    throw new Error('Network error reaching AudD');
+  }
+  if (!res.ok) throw new Error(`AudD HTTP ${res.status}`);
   const json = await res.json();
-  if (json.status !== 'success' || !json.result) return null;
+  if (json.status === 'error') {
+    // 900 = limit reached, 901 = wrong/missing api_token, etc.
+    throw new Error(json.error?.error_message || 'AudD returned an error');
+  }
+  if (!json.result) return null; // genuine no-match
   return {
     title:  json.result.title,
     artist: json.result.artist,
@@ -2026,26 +2176,64 @@ async function callAudd(blob, token) {
   };
 }
 
-async function lookupGetSongBpm(isrc, apiKey) {
-  // Returns { bpm, key_camelot, key_musical, energy } or null.
-  // GetSongBPM has rate limits; cache by ISRC in localStorage.
-  const cacheKey = `crate.gsb.${isrc}`;
+// GetSongBPM lookup. ISRC isn't reliably supported by their API, so this
+// tries ISRC first then falls back to a title+artist search.
+async function lookupGetSongBpm(recognition, apiKey) {
+  const cacheId = recognition.isrc || `${recognition.title}|${recognition.artist}`;
+  const cacheKey = `crate.gsb.${cacheId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) return JSON.parse(cached);
-  const url = `https://api.getsong.co/song/?api_key=${encodeURIComponent(apiKey)}&isrc=${encodeURIComponent(isrc)}`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const song = data?.song?.[0] || data?.song || null;
-  if (!song) return null;
-  const out = {
-    bpm: song.tempo ? Math.round(parseFloat(song.tempo)) : null,
-    key_musical: song.key_of || null,
-    key_camelot: musicalToCamelot(song.key_of || ''),
-    energy: null
+
+  const parseSong = (song) => {
+    if (!song) return null;
+    const keyOf = song.key_of || song.key || null;
+    return {
+      bpm: song.tempo ? Math.round(parseFloat(song.tempo)) : null,
+      key_musical: keyOf,
+      key_camelot: musicalToCamelot(keyOf || ''),
+      energy: null
+    };
   };
-  try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
-  return out;
+
+  // 1) ISRC attempt
+  if (recognition.isrc) {
+    try {
+      const r = await fetch(`https://api.getsong.co/song/?api_key=${encodeURIComponent(apiKey)}&isrc=${encodeURIComponent(recognition.isrc)}`);
+      if (r.ok) {
+        const d = await r.json();
+        const song = Array.isArray(d?.song) ? d.song[0] : d?.song;
+        const out = parseSong(song);
+        if (out && (out.bpm || out.key_musical)) {
+          try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
+          return out;
+        }
+      }
+    } catch (e) { console.warn('GSB ISRC lookup failed', e); }
+  }
+
+  // 2) Title + artist search fallback
+  const lookup = `song:${recognition.title} artist:${recognition.artist}`;
+  const searchUrl = `https://api.getsong.co/search/?api_key=${encodeURIComponent(apiKey)}&type=both&lookup=${encodeURIComponent(lookup)}`;
+  const sr = await fetch(searchUrl);
+  if (!sr.ok) return null;
+  const sd = await sr.json();
+  const first = Array.isArray(sd?.search) ? sd.search[0] : null;
+  if (!first) return null;
+
+  // Search result may already carry tempo/key; if not, fetch by id
+  let out = parseSong(first);
+  if ((!out || (!out.bpm && !out.key_musical)) && first.id) {
+    const dr = await fetch(`https://api.getsong.co/song/?api_key=${encodeURIComponent(apiKey)}&id=${encodeURIComponent(first.id)}`);
+    if (dr.ok) {
+      const dd = await dr.json();
+      out = parseSong(Array.isArray(dd?.song) ? dd.song[0] : dd?.song);
+    }
+  }
+  if (out && (out.bpm || out.key_musical)) {
+    try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
+    return out;
+  }
+  return null;
 }
 
 function resolveMockListen() {
@@ -2189,6 +2377,9 @@ function bindHomeEvents() {
 
   const relisten = document.getElementById('relistenBtn');
   if (relisten) relisten.addEventListener('click', startListening);
+
+  const stopBtn = document.getElementById('stopBtn');
+  if (stopBtn) stopBtn.addEventListener('click', requestStopListening);
 
   document.querySelectorAll('.rail-item').forEach(el => {
     const id = el.dataset.railId;
