@@ -2253,21 +2253,43 @@ async function lookupGetSongBpm(recognition, apiKey) {
     }
   }
 
-  // 2) Title + artist search fallback
-  const lookup = `song:${recognition.title} artist:${recognition.artist}`;
-  const searchUrl = `https://api.getsong.co/search/?api_key=${encodeURIComponent(apiKey)}&type=both&lookup=${encodeURIComponent(lookup)}`;
+  // 2) Title search, then pick the candidate whose artist matches AudD's.
+  // (type=both with song:/artist: returns no result; song-only + client-side
+  // artist match avoids grabbing a cover/remix with wrong BPM & key.)
+  const norm = (s) => String(s || '')
+    .toLowerCase()
+    .replace(/\(feat[^)]*\)/g, '')
+    .replace(/\bfeat\.?\b.*$/, '')
+    .replace(/&/g, 'and')
+    .replace(/^the\s+/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  const cleanTitle = recognition.title.replace(/\([^)]*\)/g, '').trim() || recognition.title;
+  const searchUrl = `https://api.getsong.co/search/?api_key=${encodeURIComponent(apiKey)}&type=song&lookup=${encodeURIComponent(cleanTitle)}`;
   const sr = await fetch(searchUrl);
   const sd = await sr.json().catch(() => null);
   checkKeyError(sd);
-  const first = Array.isArray(sd?.search) ? sd.search[0] : null;
-  if (!first) return null;
 
-  // Search result may already carry tempo/key; if not, fetch by id
-  let out = parseSong(first);
-  if ((!out || (!out.bpm && !out.key_musical)) && first.id) {
-    const dr = await fetch(`https://api.getsong.co/song/?api_key=${encodeURIComponent(apiKey)}&id=${encodeURIComponent(first.id)}`);
+  // search is either an array of candidates or { error: "no result" }
+  const candidates = Array.isArray(sd?.search) ? sd.search : [];
+  if (!candidates.length) return null;
+
+  const wantArtist = norm(recognition.artist);
+  const candArtist = (c) => norm(c.artist?.name || c.artist || '');
+  let best =
+    candidates.find(c => candArtist(c) === wantArtist) ||
+    candidates.find(c => wantArtist && (candArtist(c).includes(wantArtist) || wantArtist.includes(candArtist(c))));
+
+  // No artist match → don't return a wrong cover's metadata
+  if (!best) return null;
+
+  let out = parseSong(best);
+  if ((!out || (!out.bpm && !out.key_musical)) && best.id) {
+    const dr = await fetch(`https://api.getsong.co/song/?api_key=${encodeURIComponent(apiKey)}&id=${encodeURIComponent(best.id)}`);
     if (dr.ok) {
-      const dd = await dr.json();
+      const dd = await dr.json().catch(() => null);
+      checkKeyError(dd);
       out = parseSong(Array.isArray(dd?.song) ? dd.song[0] : dd?.song);
     }
   }
@@ -2284,24 +2306,23 @@ async function testGetSongBpm() {
   if (!key) { out.textContent = 'No key entered. Type it in the field above first (no need to Save).'; return; }
 
   out.textContent = 'Testing…';
-  const lines = [];
-  const probe = async (label, url) => {
-    try {
-      const r = await fetch(url);
-      const text = await r.text();
-      lines.push(`${label}\n  HTTP ${r.status}\n  ${text.slice(0, 300)}`);
-    } catch (e) {
-      lines.push(`${label}\n  NETWORK ERROR: ${e.message}`);
-    }
-    out.textContent = lines.join('\n\n');
-  };
-
-  // Known, very common track that GetSongBPM definitely has.
-  const lookup = 'song:strings of life artist:rhythim is rhythim';
-  await probe('1) Search (title+artist)',
-    `https://api.getsong.co/search/?api_key=${encodeURIComponent(key)}&type=both&lookup=${encodeURIComponent(lookup)}`);
-  await probe('2) Search (song type only)',
-    `https://api.getsong.co/search/?api_key=${encodeURIComponent(key)}&type=song&lookup=${encodeURIComponent('strings of life')}`);
+  try {
+    // Mirrors the real pipeline: title search → match by artist
+    const fake = { title: 'Strings of Life', artist: 'Rhythim Is Rhythim', isrc: null };
+    const r = await fetch(`https://api.getsong.co/search/?api_key=${encodeURIComponent(key)}&type=song&lookup=${encodeURIComponent('Strings of Life')}`);
+    const sd = await r.json().catch(() => null);
+    if (sd && typeof sd.error === 'string') { out.textContent = `Key error: ${sd.error}`; return; }
+    const cands = Array.isArray(sd?.search) ? sd.search : [];
+    const list = cands.slice(0, 6).map(c =>
+      `  • ${c.title} — ${c.artist?.name || '?'} | tempo ${c.tempo || '?'} | key ${c.key_of || '?'}`
+    ).join('\n');
+    const resolved = await lookupGetSongBpm(fake, key).catch(e => `ERROR: ${e.message}`);
+    out.textContent =
+      `HTTP ${r.status} · ${cands.length} candidates for "Strings of Life":\n${list || '  (none)'}\n\n` +
+      `Pipeline picks: ${typeof resolved === 'string' ? resolved : JSON.stringify(resolved)}`;
+  } catch (e) {
+    out.textContent = `NETWORK ERROR: ${e.message}`;
+  }
 }
 
 function resolveMockListen() {
