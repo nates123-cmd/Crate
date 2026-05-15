@@ -854,6 +854,18 @@
   }
   .setup-credit a { color: var(--text-2); text-decoration: underline; }
 
+  .app-credit {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-3);
+    padding: 18px 20px 8px;
+    line-height: 1.5;
+  }
+  .app-credit a {
+    color: var(--text-2);
+    text-decoration: underline;
+  }
+
   .setup-toggle {
     margin-top: 18px;
     padding-top: 16px;
@@ -1203,6 +1215,8 @@
       <input type="password" id="snKey" placeholder="optional" autocomplete="off">
     </div>
     <button class="setup-btn secondary" id="saveMeta">Save keys</button>
+    <button class="setup-btn secondary" id="testGsb" style="margin-top:8px">Test GetSongBPM now</button>
+    <div class="setup-note" id="gsbTestResult" style="font-family:var(--mono);font-size:11px;line-height:1.6;white-space:pre-wrap;margin-top:10px"></div>
   </div>
 
   <div class="setup-card">
@@ -1252,6 +1266,12 @@
     Music metadata powered by <a href="https://getsongbpm.com" target="_blank" rel="noopener">GetSongBPM</a>.
   </div>
 </main>
+
+<!-- Persistent attribution — always-visible, in static HTML for GetSongBPM's crawler -->
+<footer class="app-credit">
+  Track BPM &amp; key data from
+  <a href="https://getsongbpm.com" target="_blank" rel="noopener">GetSongBPM</a>
+</footer>
 
 <!-- MENU SHEET -->
 <div class="sheet-backdrop" id="menuBackdrop"></div>
@@ -1574,13 +1594,14 @@ function renderStage() {
   el.className = `stage ${state.stageMode}`;
 
   if (state.stageMode === 'idle') {
+    const liveMode = !!localStorage.getItem('crate.audd.token');
     el.innerHTML = `
-      <span class="stage-state">Ready</span>
+      <span class="stage-state">Ready · <span style="color:${liveMode ? 'var(--accent-warm)' : 'var(--text-3)'}">${liveMode ? 'LIVE (AudD)' : 'MOCK'}</span></span>
       <button class="mic-button" id="micBtn" aria-label="Start listening">
         ${micSvg()}
       </button>
       <p class="stage-prompt">Tap to catch a track</p>
-      <p class="stage-hint">Hold near the source for 10 seconds</p>
+      <p class="stage-hint">${liveMode ? 'Real recognition active' : 'No AudD token on this origin — mock catches'}</p>
     `;
   } else if (state.stageMode === 'listening') {
     const liveMeter = !!mediaRecorder; // real capture drives bars; mock uses CSS anim
@@ -2257,6 +2278,32 @@ async function lookupGetSongBpm(recognition, apiKey) {
   return null;
 }
 
+async function testGetSongBpm() {
+  const out = document.getElementById('gsbTestResult');
+  const key = (document.getElementById('gsbKey').value || localStorage.getItem('crate.getsongbpm.key') || '').trim();
+  if (!key) { out.textContent = 'No key entered. Type it in the field above first (no need to Save).'; return; }
+
+  out.textContent = 'Testing…';
+  const lines = [];
+  const probe = async (label, url) => {
+    try {
+      const r = await fetch(url);
+      const text = await r.text();
+      lines.push(`${label}\n  HTTP ${r.status}\n  ${text.slice(0, 300)}`);
+    } catch (e) {
+      lines.push(`${label}\n  NETWORK ERROR: ${e.message}`);
+    }
+    out.textContent = lines.join('\n\n');
+  };
+
+  // Known, very common track that GetSongBPM definitely has.
+  const lookup = 'song:strings of life artist:rhythim is rhythim';
+  await probe('1) Search (title+artist)',
+    `https://api.getsong.co/search/?api_key=${encodeURIComponent(key)}&type=both&lookup=${encodeURIComponent(lookup)}`);
+  await probe('2) Search (song type only)',
+    `https://api.getsong.co/search/?api_key=${encodeURIComponent(key)}&type=song&lookup=${encodeURIComponent('strings of life')}`);
+}
+
 function resolveMockListen() {
   const miss = Math.random() < 0.15;
   if (miss) {
@@ -2522,6 +2569,8 @@ function bindGlobalEvents() {
     localStorage.setItem('crate.rapidapi.key',   document.getElementById('snKey').value.trim());
     toast('Keys saved');
   });
+
+  document.getElementById('testGsb').addEventListener('click', testGetSongBpm);
 
   document.getElementById('saveAudd').addEventListener('click', () => {
     const v = document.getElementById('auddToken').value.trim();
