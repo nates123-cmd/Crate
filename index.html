@@ -1655,7 +1655,7 @@ function renderStage() {
             <span class="meta-sub">${c.energy != null ? `${c.energy} / 10` : '—'}</span>
           </div>
         </div>
-      ` : `<p class="stage-empty-meta">No metadata — can't rank.</p>`}
+      ` : `<p class="stage-empty-meta">No metadata — can't rank.${c.meta_note ? `<br><span style="color:var(--text-3)">${escapeHtml(c.meta_note)}</span>` : ''}</p>`}
     `;
   }
 }
@@ -2074,6 +2074,7 @@ async function startRealCapture(auddToken) {
 
   // Enrich with GetSongBPM (ISRC first, then title/artist search)
   let metadata = { bpm: null, key_camelot: null, key_musical: null, energy: null };
+  let metaNote = null;
   const gsbKey = localStorage.getItem('crate.getsongbpm.key');
   if (gsbKey) {
     state.identifyHint = 'Looking up BPM / key…';
@@ -2081,7 +2082,14 @@ async function startRealCapture(auddToken) {
     try {
       const m = await lookupGetSongBpm(recognition, gsbKey);
       if (m) metadata = m;
-    } catch (err) { console.warn('GetSongBPM lookup failed', err); }
+      else metaNote = 'GetSongBPM had no match for this track';
+    } catch (err) {
+      console.warn('GetSongBPM lookup failed', err);
+      metaNote = `GetSongBPM: ${err.message}`;
+      toast(metaNote);
+    }
+  } else {
+    metaNote = 'No GetSongBPM key set';
   }
 
   const c = {
@@ -2095,6 +2103,7 @@ async function startRealCapture(auddToken) {
     source_isrc: recognition.isrc || null,
     starred: false,
     note: '',
+    meta_note: metaNote,
     heard_at: Date.now(),
     acr_provider: 'audd-direct',
     acr_raw: recognition.raw
@@ -2195,28 +2204,40 @@ async function lookupGetSongBpm(recognition, apiKey) {
     };
   };
 
+  // GetSongBPM signals a dead key with {"error":"Invalid API Key, or inactive."}
+  const checkKeyError = (payload) => {
+    if (payload && typeof payload.error === 'string') {
+      if (/api key/i.test(payload.error)) {
+        throw new Error('key invalid or not yet activated (backlink check pending?)');
+      }
+      throw new Error(payload.error);
+    }
+  };
+
   // 1) ISRC attempt
   if (recognition.isrc) {
     try {
       const r = await fetch(`https://api.getsong.co/song/?api_key=${encodeURIComponent(apiKey)}&isrc=${encodeURIComponent(recognition.isrc)}`);
-      if (r.ok) {
-        const d = await r.json();
-        const song = Array.isArray(d?.song) ? d.song[0] : d?.song;
-        const out = parseSong(song);
-        if (out && (out.bpm || out.key_musical)) {
-          try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
-          return out;
-        }
+      const d = await r.json().catch(() => null);
+      checkKeyError(d);
+      const song = Array.isArray(d?.song) ? d.song[0] : d?.song;
+      const out = parseSong(song);
+      if (out && (out.bpm || out.key_musical)) {
+        try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
+        return out;
       }
-    } catch (e) { console.warn('GSB ISRC lookup failed', e); }
+    } catch (e) {
+      if (/key invalid|api key/i.test(e.message)) throw e; // propagate key errors
+      console.warn('GSB ISRC lookup failed', e);
+    }
   }
 
   // 2) Title + artist search fallback
   const lookup = `song:${recognition.title} artist:${recognition.artist}`;
   const searchUrl = `https://api.getsong.co/search/?api_key=${encodeURIComponent(apiKey)}&type=both&lookup=${encodeURIComponent(lookup)}`;
   const sr = await fetch(searchUrl);
-  if (!sr.ok) return null;
-  const sd = await sr.json();
+  const sd = await sr.json().catch(() => null);
+  checkKeyError(sd);
   const first = Array.isArray(sd?.search) ? sd.search[0] : null;
   if (!first) return null;
 
