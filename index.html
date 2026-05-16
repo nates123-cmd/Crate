@@ -1205,16 +1205,21 @@
 
   <div class="setup-card">
     <div class="setup-h">Metadata</div>
-    <p class="setup-p">After AudD names the track, Crate looks up BPM/key/energy. SoundNet (Track Analysis via RapidAPI) is primary — broad catalog. GetSongBPM is the fallback.</p>
+    <p class="setup-p">After AudD names the track, Crate looks up BPM/key/energy. Waterfall: Songstats by ISRC (exact recording, Spotify-grade) → SoundNet by title/artist → GetSongBPM.</p>
     <div class="setup-field">
-      <label>RapidAPI key — SoundNet (primary)</label>
+      <label>Songstats API key — primary (by ISRC)</label>
+      <input type="password" id="ssKey" placeholder="apikey header value" autocomplete="off">
+    </div>
+    <div class="setup-field">
+      <label>RapidAPI key — SoundNet (fallback)</label>
       <input type="password" id="snKey" placeholder="x-rapidapi-key" autocomplete="off">
     </div>
     <div class="setup-field">
-      <label>GetSongBPM API key (fallback)</label>
+      <label>GetSongBPM API key (last resort)</label>
       <input type="password" id="gsbKey" placeholder="optional" autocomplete="off">
     </div>
     <button class="setup-btn secondary" id="saveMeta">Save keys</button>
+    <button class="setup-btn secondary" id="testSs" style="margin-top:8px">Test Songstats now</button>
     <button class="setup-btn secondary" id="testSn" style="margin-top:8px">Test SoundNet now</button>
     <button class="setup-btn secondary" id="testGsb" style="margin-top:8px">Test GetSongBPM now</button>
     <div class="setup-note" id="gsbTestResult" style="font-family:var(--mono);font-size:11px;line-height:1.6;white-space:pre-wrap;margin-top:10px"></div>
@@ -2094,16 +2099,30 @@ async function startRealCapture(auddToken) {
     return;
   }
 
-  // Metadata waterfall: SoundNet (primary — broad catalog) → GetSongBPM (fallback)
+  // Metadata waterfall:
+  //   Songstats by ISRC (exact recording, Spotify-grade) → SoundNet (title/artist) → GetSongBPM
   let metadata = { bpm: null, key_camelot: null, key_musical: null, energy: null };
   let metaNote = null;
   let metaSource = null;
+  const ssKey  = localStorage.getItem('crate.songstats.key');
   const snKey  = localStorage.getItem('crate.rapidapi.key');
   const gsbKey = localStorage.getItem('crate.getsongbpm.key');
 
   const hasMeta = (m) => m && (m.bpm || m.key_camelot);
 
-  if (snKey) {
+  if (ssKey && recognition.isrc) {
+    state.identifyHint = 'Looking up BPM / key (Songstats)…';
+    render();
+    try {
+      const m = await lookupSongstats(recognition, ssKey);
+      if (hasMeta(m)) { metadata = m; metaSource = 'songstats'; }
+    } catch (err) {
+      console.warn('Songstats lookup failed', err);
+      metaNote = `Songstats: ${err.message}`;
+    }
+  }
+
+  if (!metaSource && snKey) {
     state.identifyHint = 'Looking up BPM / key (SoundNet)…';
     render();
     try {
@@ -2129,7 +2148,7 @@ async function startRealCapture(auddToken) {
   }
 
   if (!metaSource && !metaNote) {
-    metaNote = (snKey || gsbKey) ? 'No metadata source had this track' : 'No metadata key set';
+    metaNote = (ssKey || snKey || gsbKey) ? 'No metadata source had this track' : 'No metadata key set';
   }
   if (metaSource) metaNote = null;
 
@@ -2225,6 +2244,66 @@ async function callAudd(blob, token) {
     isrc:   json.result.isrc || null,
     raw:    json
   };
+}
+
+// Songstats Enterprise — query by ISRC (exact recording).
+// audio_analysis is Spotify's audio-features schema (0–1 ranges).
+async function lookupSongstats(recognition, apiKey) {
+  if (!recognition.isrc) return null;
+  const cacheKey = `crate.ss.${recognition.isrc}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 12000);
+  let res;
+  try {
+    res = await fetch(
+      `https://api.songstats.com/enterprise/v1/tracks/info?isrc=${encodeURIComponent(recognition.isrc)}`,
+      { headers: { 'apikey': apiKey, 'Accept': 'application/json' }, signal: ctrl.signal }
+    );
+  } catch (e) {
+    clearTimeout(to);
+    if (e.name === 'AbortError') throw new Error('Songstats timed out (12s)');
+    throw new Error(`fetch failed: ${e.message}`);
+  }
+  clearTimeout(to);
+
+  if (res.status === 401 || res.status === 403) throw new Error('API key rejected (401/403)');
+  if (res.status === 429) throw new Error('rate limit hit (429)');
+  if (res.status === 404) return null; // ISRC not in their catalog
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const d = await res.json().catch(() => null);
+  // audio_analysis is top-level in the example, but nested under track_info
+  // in the schema — handle both.
+  const aaArr = (Array.isArray(d?.audio_analysis) && d.audio_analysis)
+             || (Array.isArray(d?.track_info?.audio_analysis) && d.track_info.audio_analysis)
+             || [];
+  if (!aaArr.length) return null;
+
+  const aa = {};
+  for (const item of aaArr) if (item && item.key != null) aa[item.key] = item.value;
+
+  const tempo = aa.tempo != null ? Math.round(parseFloat(aa.tempo)) : null;
+  const keyLetter = (aa.key != null && String(aa.key) !== '-1') ? String(aa.key).trim() : null;
+  const isMajor = parseFloat(aa.mode) >= 0.5; // Spotify mode: 1 major, 0 minor
+  let key_musical = null, key_camelot = null;
+  if (keyLetter) {
+    key_musical = `${keyLetter} ${isMajor ? 'major' : 'minor'}`;
+    key_camelot = musicalToCamelot(keyLetter + (isMajor ? '' : 'm'));
+  }
+  const eRaw = aa.energy != null ? parseFloat(aa.energy) : null;
+  const energy = (eRaw != null && isFinite(eRaw))
+    ? Math.max(1, Math.min(10, Math.round(eRaw * 10)))
+    : null;
+
+  const out = { bpm: tempo, key_camelot, key_musical, energy };
+  if (out.bpm || out.key_camelot) {
+    try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
+    return out;
+  }
+  return null;
 }
 
 // SoundNet "Track Analysis" via RapidAPI. Returns Camelot directly.
@@ -2388,6 +2467,29 @@ async function testGetSongBpm() {
       `Pipeline picks: ${typeof resolved === 'string' ? resolved : JSON.stringify(resolved)}`;
   } catch (e) {
     out.textContent = `NETWORK ERROR: ${e.message}`;
+  }
+}
+
+async function testSongstats() {
+  const out = document.getElementById('gsbTestResult');
+  const key = (document.getElementById('ssKey').value || localStorage.getItem('crate.songstats.key') || '').trim();
+  if (!key) { out.textContent = 'No Songstats key. Enter it in the Songstats field first.'; return; }
+  out.textContent = 'Testing Songstats…';
+
+  // Known ISRCs: Don Diablo "Mr. Brightside" (from their docs), and the docs' example.
+  const probes = [
+    { isrc: 'NL1ZN2000366', label: 'Mr. Brightside — Don Diablo' },
+    { isrc: 'GBAYE2100626', label: 'docs example ISRC' }
+  ];
+  const lines = [];
+  for (const p of probes) {
+    try {
+      const r = await lookupSongstats({ isrc: p.isrc }, key);
+      lines.push(`${p.label} (${p.isrc})\n  ${r ? JSON.stringify(r) : 'no match / no audio_analysis'}`);
+    } catch (e) {
+      lines.push(`${p.label} (${p.isrc})\n  ERROR: ${e.message}`);
+    }
+    out.textContent = lines.join('\n\n');
   }
 }
 
@@ -2674,11 +2776,13 @@ function bindGlobalEvents() {
     toast('Credentials saved');
   });
   document.getElementById('saveMeta').addEventListener('click', () => {
+    localStorage.setItem('crate.songstats.key',  document.getElementById('ssKey').value.trim());
     localStorage.setItem('crate.getsongbpm.key', document.getElementById('gsbKey').value.trim());
     localStorage.setItem('crate.rapidapi.key',   document.getElementById('snKey').value.trim());
     toast('Keys saved');
   });
 
+  document.getElementById('testSs').addEventListener('click', testSongstats);
   document.getElementById('testGsb').addEventListener('click', testGetSongBpm);
   document.getElementById('testSn').addEventListener('click', testSoundNet);
 
@@ -3043,6 +3147,7 @@ function init() {
   // Restore setup field values
   document.getElementById('supaUrl').value = localStorage.getItem('crate.supabase.url') || '';
   document.getElementById('supaKey').value = localStorage.getItem('crate.supabase.key') || '';
+  document.getElementById('ssKey').value   = localStorage.getItem('crate.songstats.key') || '';
   document.getElementById('gsbKey').value  = localStorage.getItem('crate.getsongbpm.key') || '';
   document.getElementById('snKey').value   = localStorage.getItem('crate.rapidapi.key') || '';
   document.getElementById('auddToken').value = localStorage.getItem('crate.audd.token') || '';
