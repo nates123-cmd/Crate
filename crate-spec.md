@@ -6,6 +6,31 @@ The sixth app in the suite. Functional-but-different dialect: not a card stack, 
 
 ---
 
+## ⚑ Direction update — 2026-05-18 (supersedes conflicting sections below)
+
+After building the Phase 1 UI shell and a long metadata-provider investigation, the project pivoted. **Read this section first; where it conflicts with the original spec below, this wins.**
+
+**Primary use case is home set-building, not the live booth.** Nate's words: "a more-interesting suggestion machine." The value is the *quality/interestingness of transition suggestions* against records he owns — not on-the-go recognition. This reprioritizes everything.
+
+**Metadata strategy — resolved.** The web-API hunt (GetSongBPM → SoundNet → Songstats) was solving the wrong half:
+- GetSongBPM: pop-skewed, whiffs on underground. SoundNet: free tier 429s, accuracy unvalidated. Spotify audio-features: dead for new apps (deprecated Nov 2024, new-app creation disabled Dec 2025).
+- Songstats *is* the right web source (Spotify-grade, ISRC-exact) **but** it's Enterprise/sales-gated at €25/mo minimum — not worth it for an audience of one *now* (revisit if Crate gets users). Free test key still worth validating as the *on-the-go* path only; **off the critical path.**
+- **The real source already exists locally and free:** Nate's Mixed In Key DB (`~/Library/Application Support/Mixedinkey/Collection11.mikdb`, 94 tracks, pro BPM/Camelot/energy 1–10) + his `~/music-analyzer` tool (3-tier DSP+Gemini+custom: BPM, key+Camelot, energy mean/peak/timeline, sections, mood, genre, harmonic complexity, + a personal model predicting his energy-stars/tags/color).
+
+**Architecture pivot — local enrichment, not in-browser import.** `pyrekordbox` reads the live Rekordbox DB directly (4,744 tracks; 3,542 with local files; 855 Purple + 569 Blue ≈ 1,424 curated). This obsoletes the in-browser XML/TXT/colour/normKey import entirely (it gets gutted). New shape:
+
+- **Local sync script** (`tools/sync_library.py`, runs on Mac, reuses the music-analyzer venv; read-only on Rekordbox so it's safe with RB open): read Rekordbox → resolve BPM/key/energy via local free waterfall (MIK DB → existing `.analysis.json` → flag "needs analysis") → batched upsert to shared Supabase `crate_tracks`, keyed by stable Rekordbox `content.ID` (no fuzzy matching).
+- **Crate PWA** stops importing anything; reads `crate_tracks` from Supabase. This finally moves Crate onto the shared suite Supabase project (was localStorage-only).
+- `crate_tracks` schema extends with mood/genre/energy-arc/sections/harmonic/bpm-source/confidence so the ranking engine has depth.
+
+**Phasing (revised):**
+- **Phase A — library enrichment + Supabase onboarding.** A1: build `tools/sync_library.py` + schema migration + wire Crate to Supabase, using the 94 MIK + 123 already-analyzed tracks (no new analysis runs). A2: run music-analyzer batch (DSP-only pass fast; rich AI/personal pass overnight via the existing checkpointed `batch_tag_library.py` pattern) to fill coverage.
+- **Phase B — ranking engine v2.** Beyond key+BPM+energy+tags: mood, energy trajectory, genre adjacency, section-aware mixability, with a UI **intent selector** ("build / hold / cool down / go deeper") that re-ranks the rail. This is the "more-interesting suggestion machine."
+
+**Status at restart (2026-05-18):** investigation complete, design agreed in principle, **A1 not yet started** — awaiting Nate's go-ahead to gut the in-browser import, wire Supabase, and write `sync_library.py` + the schema migration. Phase 1 UI shell (mock + AudD direct test mode + the 3-provider metadata waterfall code) remains committed and deployed at https://nates123-cmd.github.io/Crate/.
+
+---
+
 ## What it does
 
 You're somewhere with music — a bar, a friend's set, a record store, your own kitchen. You open Crate, tap the mic, and ten seconds later the app tells you what's playing, what key/BPM/energy it sits at, and which five tracks from your Crate would mix best into it. Tap one to mark it "played next." Tap the star on anything to save it for later listening.

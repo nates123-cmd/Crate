@@ -1,61 +1,45 @@
 # Crate — Status
 
-## Phase 1 — what's in this build
+_Last updated 2026-05-18, before a machine restart. See the "⚑ Direction update" section at the top of `crate-spec.md` for the full reasoning — this is the operational summary._
 
-UI-shell with mock data. End-to-end interactive, no live backend yet.
+## Where we are
 
-**Working in the browser:**
-- Three-zone live cockpit (Stage / Rail / Log) per spec
-- Stage states: idle → listening → identified → miss
-- 10-second mock listen flow (real timer, fake ACR result)
-- Pure-function ranking against a 24-track mock crate library
-  - Camelot wheel: same key 1.0, adjacent / relative 0.8, energy boost (+7) 0.6, else 0
-  - BPM: 1.0 within ±3%, linear falloff to 0 at ±8%
-  - Energy delta, tag Jaccard, freshness (flat 1.0 for now)
-- Tap rail row → expand score breakdown
-- Long-press rail row → "Played this next?" confirmation → writes to local history
-- Tap log row → restore that catch to stage, regenerate rail
-- Star toggle inline on log rows (persists)
-- 24-hour implicit session window — log shows everything caught in last 24h
-- Library view: search + BPM filter chips + starred-catches filter
-- Setup view: real Rekordbox XML parser (DOMParser, dedupes by Rekordbox ID, persists to localStorage); credential fields for Supabase / GetSongBPM / RapidAPI
-- GetSongBPM backlink in Setup credit footer (per TOS)
-- LocalStorage persistence across reloads
+**Phase 1 UI shell: built, committed, deployed.** https://nates123-cmd.github.io/Crate/ (auto-redeploys on push to `main`). Repo: https://github.com/nates123-cmd/Crate. Local: `~/Documents/Claude-Code-projects/Crate App/crate`.
 
-**Stubbed but not live:**
-- `supabase/functions/acr-recognize/index.ts` — full AudD-backed Edge Function ready to deploy
-- `supabase/migrations/0001_init.sql` — schema for all 5 Phase 1 tables with RLS
-- `manifest.json` — PWA install metadata (no icons yet)
+Working in the deployed app:
+- Three-zone cockpit (Stage / Rail / Log); states idle → listening → identifying → identified → miss/error
+- Real mic capture (MediaRecorder, live audio meter, stop button) + **AudD direct test mode** — recognition works end-to-end, returns ISRC
+- Ranking engine (Camelot wheel, BPM tolerance, energy, tag Jaccard) — works against the imported library
+- Metadata waterfall wired: **Songstats (ISRC) → SoundNet (title/artist) → GetSongBPM**, each with a "Test … now" button in Setup
+- In-browser library import: Rekordbox XML + TXT/MyTags merge, stars, colors (⚠ **slated for deletion** — see pivot)
+- localStorage persistence (Crate is **not yet on Supabase**)
 
-## Decisions taken (per Nate's go-ahead)
+## The pivot (decided, not yet built)
 
-- **Sessions**: 24h implicit window. Each catch within last 24h = same session in the UI. Explicit start/end lands in Phase 2.
-- **Audio format**: MediaRecorder webm/opus, 10s. Locked when the Edge Function ships.
-- **DSP fallback**: deferred to Phase 2. Phase 1 surfaces "No metadata — can't rank." cleanly.
-- **API integration**: UI shell first; live wiring follows.
+Primary use case clarified: **home set-building — "a more-interesting suggestion machine"**, not the live booth. This de-prioritizes on-the-go/Songstats and prioritizes deep local library enrichment + a richer ranking engine.
 
-## What's next (to ship Phase 1 fully)
+Metadata is solved **locally and free**, not via web APIs:
+- **Mixed In Key DB** — `~/Library/Application Support/Mixedinkey/Collection11.mikdb`, 94 tracks, pro BPM + Camelot + energy 1–10 (ZSONG: ZNAME/ZARTIST/ZTEMPO/ZKEY/ZENERGY/ZTAGENERGY).
+- **`~/music-analyzer`** — 3-tier analyzer; rich schema (dsp.bpm, dsp.key+camelot, custom.energy_mean/peak/timeline, sections, harmonic_complexity, ai.mood/genre, personal.predicted_rating/tags/color). 123 `.analysis.json` already exist in `~/Music`. Venv at `~/music-analyzer/.venv`.
+- **`pyrekordbox`** (in that venv) reads the live Rekordbox DB directly — read-only is safe with RB open. 4,744 tracks / 3,542 with files / 855 Purple + 569 Blue ≈ 1,424 curated. Gives stable `content.ID`, title, artist, FolderPath, ColorID, MyTags, Rating, Genre. **Obsoletes the in-browser import.**
 
-1. Stand up Supabase project + apply `0001_init.sql`
-2. Deploy `acr-recognize` Edge Function with AudD token in env
-3. Wire Supabase Auth (email magic-link) — mirror the suite's pattern
-4. Replace the mock ACR flow in `index.html` with:
-   - MediaRecorder capture (webm/opus, 10s)
-   - base64 encode + POST to `acr-recognize`
-   - On success, read returned `caught_tracks` row instead of building one client-side
-5. Wire GetSongBPM ISRC lookup (browser → API directly with stored key)
-6. Replace localStorage crate with Supabase REST upsert (batch 200/request)
+## Next action (awaiting go-ahead)
 
-## What's deliberately out of scope for Phase 1
+**Phase A1** — gut the in-browser XML/TXT import; wire Crate to the shared suite Supabase project (`xsmnfcmtbpeaccnyinkr`); write `tools/sync_library.py` (Rekordbox read → MIK + existing `.analysis.json` join → batched upsert to `crate_tracks` keyed by Rekordbox content.ID); extend the `crate_tracks` schema (mood/genre/energy-arc/sections/harmonic/bpm-source/confidence). Use only the 94 MIK + 123 analyzed tracks — no new analysis runs in A1.
 
-- Always-on listening (Phase 3 — depends on Phase 1 usage data)
-- Tag inference via Claude API (Phase 4)
-- Session review screen with transition ratings (Phase 2)
-- Local DSP fallback for ACR misses (Phase 2)
-- Natural-language crate queries (Phase 4)
-- Service worker / offline cache
-- PWA icons
+**Phase A2** — run the analyzer batch to fill coverage (DSP-only pass first ≈ fast; rich AI/personal pass overnight via existing checkpointed `batch_tag_library.py` pattern).
 
-## Open question to revisit
+**Phase B** — ranking v2: mood / energy-trajectory / genre-adjacency / section-aware scoring + a UI intent selector ("build / hold / cool down / go deeper").
 
-The mock currently picks "wild" tracks from a cycling pool with a 15% miss rate. That's instrumentation for feel — real ACR will have its own miss profile. Once AudD is wired, decide whether to surface confidence on the stage (e.g., show "low confidence" badge below `Caught it`) or hide it.
+## Parked / de-prioritized
+
+- **Songstats** — right web source but €25/mo Enterprise minimum, not worth it for solo use now. Free test key requested from rep (Evan Sacks) for the *on-the-go* path only; revalidate if Crate gets users. Not the critical path.
+- SoundNet (free tier 429s), GetSongBPM (whiffs on underground), Spotify audio-features (dead for new apps) — all dead ends, documented in `crate-spec.md`.
+- Always-on listening (Phase 3), session review (Phase 2), service worker / PWA icons.
+
+## Risks / notes for next session
+
+- Phase A **deletes** the recent in-browser import code (hundreds of lines). Intentional — superseded by the sync script. Nate okayed the direction; confirm before deleting.
+- Crate moving onto Supabase is new scope folded into Phase A (was deferred).
+- MIK/Rekordbox join is by **file path / content.ID**, not fuzzy title — clean.
+- Don't write to the Rekordbox DB from the sync (read-only). `batch_tag_library.py` is the only thing that writes RB, and it refuses to run while RB is open.
