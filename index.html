@@ -53,6 +53,20 @@
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
     overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Re-enable text selection on form fields + user content the user may want to copy */
+  input, textarea, select, [contenteditable],
+  .lib-row-title, .lib-row-artist, .lib-row-key, .lib-row-bpm,
+  .rail-title, .rail-artist, .rail-key, .rail-bpm, .rail-detail-key,
+  .stage-track, .stage-artist, .stage-meta,
+  .log-title, .log-artist,
+  .meta-value, .camelot, .setup-note {
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   body {
