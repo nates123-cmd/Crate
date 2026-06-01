@@ -1,0 +1,12 @@
+{
+  "name": "crate-qa-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated QA harness for the Crate single-file PWA. Additive only — exercises the app's REAL window globals via Playwright page.evaluate.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
